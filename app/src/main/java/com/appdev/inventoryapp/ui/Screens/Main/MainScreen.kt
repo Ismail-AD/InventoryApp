@@ -17,7 +17,10 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
@@ -30,8 +33,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.appdev.inventoryapp.domain.model.BottomNavItem
+import com.appdev.inventoryapp.domain.model.CartData
 import com.appdev.inventoryapp.domain.model.InventoryItem
 import com.appdev.inventoryapp.navigation.Routes
+import com.appdev.inventoryapp.ui.Screens.CartSummary.CartSummaryScreen
 import com.appdev.inventoryapp.ui.Screens.Inventory.InventoryScreen
 import com.appdev.inventoryapp.ui.Screens.InventoryManagemnt.AddInventoryItemRoot
 import com.appdev.inventoryapp.ui.Screens.InventoryManagemnt.AddInventoryItemViewModel
@@ -39,6 +44,10 @@ import com.appdev.inventoryapp.ui.Screens.ProductDetails.ProductDetailScreen
 import com.appdev.inventoryapp.ui.Screens.Profile.ProfileScreen
 import com.appdev.inventoryapp.ui.Screens.Reports.ReportsScreen
 import com.appdev.inventoryapp.ui.Screens.Sales.SalesScreen
+import com.appdev.inventoryapp.ui.Screens.SalesEntry.SalesEntryScreen
+import com.appdev.inventoryapp.ui.Screens.SalesHistory.SalesHistoryScreen
+import com.appdev.inventoryapp.ui.Screens.SalesPage.SalesPageScreen
+import com.appdev.inventoryapp.ui.Screens.SalesPage.SalesPageViewModel
 import com.appdev.inventoryapp.ui.Screens.UserManagement.UsersManagementScreen
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -50,6 +59,9 @@ fun MainScreen() {
     val hideBottomBarRoutes = listOf(
         Routes.AddProduct.route + "/{productJson}?",
         Routes.ProductDetail.route + "/{productJson}",
+        Routes.SalesEntry.route + "/{productJson}",
+        Routes.CartSummary.route,
+        Routes.ProductSearch.route,
     )
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
 
@@ -61,7 +73,7 @@ fun MainScreen() {
             label = "Inventory"
         ),
         BottomNavItem(
-            route = "sales",
+            route = Routes.SalesHistory.route,
             icon = { Icon(Icons.Default.ShoppingCart, contentDescription = "Sales") },
             label = "Sales"
         ),
@@ -84,6 +96,8 @@ fun MainScreen() {
             }
         }
     ) { innerPadding ->
+
+        val salesViewModel: SalesPageViewModel = hiltViewModel()
         NavHost(
             navController = navController,
             startDestination = Routes.InventoryManagement.route,
@@ -92,7 +106,7 @@ fun MainScreen() {
 
             composable(Routes.InventoryManagement.route) {
                 InventoryScreen(navigateToAddItem = {
-                    navController.navigate(Routes.AddProduct.route+"/{}")
+                    navController.navigate(Routes.AddProduct.route + "/{}")
                 }, navigateToItemDetail = {
                     val productJson = Uri.encode(Json.encodeToString(it))
                     navController.navigate(Routes.ProductDetail.route + "/$productJson")
@@ -108,9 +122,56 @@ fun MainScreen() {
                     )
                 }
             }
-            composable(Routes.SalesHistory.route) {
-                SalesScreen()
+            composable(Routes.ProductSearch.route) {
+                SalesPageScreen(viewModel = salesViewModel, navigateToProductDetail = {
+                    val productJson = Uri.encode(Json.encodeToString(it))
+                    navController.navigate(Routes.SalesEntry.route + "/$productJson")
+                }, navigateToCartSummary = {
+                    navController.navigate(Routes.CartSummary.route)
+
+                }) {
+                    navController.navigateUp()
+                }
             }
+            composable(
+                Routes.CartSummary.route
+            ) { backStackEntry ->
+                CartSummaryScreen(
+                    viewModel = salesViewModel,
+                    navigateBack = { navController.navigateUp() },
+                    navigateToSalesHistory = {
+                        navController.navigate(Routes.SalesHistory.route) {
+                            popUpTo(Routes.CartSummary.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+            composable(Routes.SalesHistory.route) {
+                SalesHistoryScreen(viewModel = salesViewModel) {
+                    navController.navigate(Routes.ProductSearch.route)
+                }
+            }
+
+            composable(Routes.SalesEntry.route + "/{productJson}", arguments = listOf(
+                navArgument("productJson") {
+                    type = NavType.StringType
+                }
+            )) { backStackEntry ->
+
+
+                val productJson = backStackEntry.arguments?.getString("productJson") ?: ""
+                val decodedProduct = try {
+                    Json.decodeFromString<InventoryItem>(Uri.decode(productJson))
+                } catch (e: Exception) {
+                    null
+                }
+                decodedProduct?.let { product ->
+                    SalesEntryScreen(viewModel = salesViewModel, product = product) {
+                        navController.navigateUp()
+                    }
+                }
+            }
+
             composable(Routes.AddProduct.route + "/{productJson}?",
                 arguments = listOf(
                     navArgument("productJson") {
@@ -139,7 +200,7 @@ fun MainScreen() {
                 ReportsScreen()
             }
             composable(Routes.UserManagement.route) {
-                UsersManagementScreen {  }
+                UsersManagementScreen { }
             }
             composable(Routes.Profile.route) {
                 ProfileScreen()

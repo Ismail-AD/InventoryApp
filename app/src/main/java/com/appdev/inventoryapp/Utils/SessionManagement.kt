@@ -65,6 +65,7 @@ class SessionManagement @Inject constructor(private val sharedPreferences: Share
     fun getUserId(): String? = sharedPreferences.getString(KEY_USER_ID, null)
     fun getUserRole(): String? = sharedPreferences.getString(KEY_USER_ROLE, null)
     fun getUserEmail(): String? = sharedPreferences.getString(KEY_USER_EMAIL, null)
+    fun getUserName(): String? = sharedPreferences.getString(KEY_USER_NAME, null)
 
     fun isSessionValid(): Boolean {
         val expiresAt = sharedPreferences.getLong(KEY_EXPIRES_AT, 0)

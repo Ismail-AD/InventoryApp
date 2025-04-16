@@ -4,9 +4,16 @@ import android.net.Uri
 import com.appdev.inventoryapp.Utils.ResultState
 import com.appdev.inventoryapp.domain.model.Category
 import com.appdev.inventoryapp.domain.model.InventoryItem
+import com.appdev.inventoryapp.domain.model.SalesRecord
 import kotlinx.coroutines.flow.Flow
 
 interface InventoryRepository {
+    fun getSalesRecords(shopId: String): Flow<ResultState<List<SalesRecord>>>
+    fun updateInventoryItems(
+        salesRecord: SalesRecord,
+        mapOfProductData: Map<Long, Int>
+    ): Flow<ResultState<String>>
+
     fun getAllInventoryItems(shopId: String?): Flow<ResultState<List<InventoryItem>>>
     fun addInventoryItem(
         item: InventoryItem, imageByteArrays: List<ByteArray?>,

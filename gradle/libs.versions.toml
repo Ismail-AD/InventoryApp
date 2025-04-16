@@ -19,6 +19,7 @@ coil="3.0.3"
 coilokhttp="3.1.0"
 accompanist = "0.24.13-rc"
 nanoid_version="2.0.0"
+gson="2.13.0"
 
 
 [libraries]
@@ -50,6 +51,7 @@ ktor-client-android = { group = "io.ktor", name = "ktor-client-android", version
 coil3 = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil3-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coilokhttp" }
 accompanist-pager = { module = "com.google.accompanist:accompanist-pager", version.ref = "accompanist" }
+gson-library = { module = "com.google.code.gson:gson", version.ref = "gson" }
 
 
 [plugins]

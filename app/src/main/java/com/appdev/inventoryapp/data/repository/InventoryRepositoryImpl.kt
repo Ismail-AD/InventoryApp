@@ -5,7 +5,10 @@ import android.util.Log
 import com.appdev.inventoryapp.Utils.ResultState
 import com.appdev.inventoryapp.domain.model.Category
 import com.appdev.inventoryapp.domain.model.InventoryItem
+import com.appdev.inventoryapp.domain.model.SaleRecordItem
+import com.appdev.inventoryapp.domain.model.SalesRecord
 import com.appdev.inventoryapp.domain.repository.InventoryRepository
+import com.google.gson.Gson
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
@@ -16,6 +19,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import java.util.UUID
 import javax.inject.Inject
+import kotlin.math.abs
 
 class InventoryRepositoryImpl @Inject constructor(
     val supabase: SupabaseClient,
@@ -23,6 +27,72 @@ class InventoryRepositoryImpl @Inject constructor(
 
     private val itemImageBucketId = "itemimages"
     private val itemImageFolderPath = "public/17dr9sb_2"
+
+
+    override fun getSalesRecords(shopId: String): Flow<ResultState<List<SalesRecord>>> = flow {
+        try {
+            emit(ResultState.Loading)
+
+            // Instead of decoding to Map<String, Any>, decode directly to SalesRecord
+            val salesRecords = supabase
+                .from("sales")
+                .select {
+                    filter {
+                        eq("shop_id", shopId)
+                    }
+                }
+                .decodeList<SalesRecord>()
+
+            emit(ResultState.Success(salesRecords))
+        } catch (e: Exception) {
+            Log.e("SALES_RECORD", "Error fetching sales records: ${e.localizedMessage}")
+            emit(ResultState.Failure(e))
+        }
+    }
+
+
+    override fun updateInventoryItems(
+        salesRecord: SalesRecord,
+        mapOfProductData: Map<Long, Int>
+    ): Flow<ResultState<String>> = flow {
+        try {
+            emit(ResultState.Loading)
+
+            // No need for manual JSON conversion, Supabase serializer will handle it
+            supabase.from("sales").insert(salesRecord)
+
+            getCurrentUserId()?.let { uid ->
+                // Process each item in the sales record
+                for (saleItem in salesRecord.salesRecordItem) {
+                    // Update the inventory item - only updating quantity and discount fields
+                    val quantityAvailable = mapOfProductData[saleItem.productId] ?: 0
+                    supabase.from("inventory").update(
+                        {
+                            // Decrease the available quantity by the sold quantity
+                            set("quantity", abs(saleItem.quantity - quantityAvailable))
+                            // Update discount information
+                            set("discount", saleItem.discountAmount)
+                            set("discountType", saleItem.isPercentageDiscount)
+                            // Update the lastUpdated timestamp
+                            set("lastUpdated", System.currentTimeMillis().toString())
+                        }
+                    ) {
+                        filter {
+                            eq("id", saleItem.productId)
+                            eq("creator_id", uid)
+                        }
+                    }
+                }
+
+                emit(ResultState.Success("Sales record saved successfully"))
+
+            } ?: emit(ResultState.Failure(Exception("User not authenticated")))
+
+        } catch (e: Exception) {
+            Log.d("CHJAZ","${e.localizedMessage}")
+            emit(ResultState.Failure(e))
+        }
+    }
 
 
     override fun addCategory(
@@ -214,6 +284,8 @@ class InventoryRepositoryImpl @Inject constructor(
                         set("categoryName", item.category)
                         set("sku", item.sku)
                         set("taxes", item.taxes)
+                        set("discount", item.discountAmount)
+                        set("discountType", item.isPercentageDiscount)
                     }
                 ) {
                     filter {
