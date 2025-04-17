@@ -21,7 +21,7 @@ android {
     val supabaseUrl: String = localProperties.getProperty("supabaseUrl") ?: ""
     defaultConfig {
         applicationId = "com.appdev.inventoryapp"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
@@ -92,6 +92,7 @@ dependencies {
     implementation(libs.hilt.android)
     implementation(libs.coil3)
     implementation(libs.nanoid)
+    implementation(libs.composecharts)
     implementation(libs.gson.library)
     implementation(libs.coil3.network.okhttp)
     kapt(libs.hilt.compiler)

@@ -1,6 +1,5 @@
 package com.appdev.inventoryapp.ui.Screens.UserManagement
 
-import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -14,7 +13,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -24,10 +22,15 @@ import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appdev.inventoryapp.R
+import com.appdev.inventoryapp.Utils.AuditActionType
 import com.appdev.inventoryapp.Utils.Permission
 import com.appdev.inventoryapp.Utils.UserRole
+import com.appdev.inventoryapp.domain.model.AuditLogEntry
 import com.appdev.inventoryapp.domain.model.UserEntity
 import com.appdev.inventoryapp.ui.Reuseables.DeleteConfirmationDialog
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun UsersManagementScreen(
@@ -37,6 +40,7 @@ fun UsersManagementScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     UsersManagementScreenContent(
+        viewModel.getUserRole(),
         state = state,
         onEvent = viewModel::handleEvent,
         navigateToUserDetail = navigateToUserDetail
@@ -46,6 +50,7 @@ fun UsersManagementScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UsersManagementScreenContent(
+    userRole: String,
     state: UsersListState,
     onEvent: (UsersListEvent) -> Unit,
     navigateToUserDetail: (String?) -> Unit
@@ -90,6 +95,29 @@ fun UsersManagementScreenContent(
                         .fillMaxSize()
                         .padding(16.dp)
                 ) {
+                    if (userRole == "Admin") {
+                        Button(
+                            onClick = {
+                                onEvent(UsersListEvent.FetchAllLogs)
+                                onEvent(UsersListEvent.ShowLogsDialog)
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 16.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ListAlt,
+                                contentDescription = "Show Logs",
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Show Logs")
+                        }
+                    }
                     UserSearchBar(
                         query = state.searchQuery,
                         onQueryChange = { onEvent(UsersListEvent.SearchUsers(it)) }
@@ -127,7 +155,7 @@ fun UsersManagementScreenContent(
                     } else {
                         UsersList(
                             users = state.filteredUsers,
-                            onUserClick = { navigateToUserDetail(it.id) },
+                            onUserClick = { onEvent(UsersListEvent.ShowEditUserDialog(it)) } ,
                             onActivate = { onEvent(UsersListEvent.ActivateUser(it.id)) },
                             onDeactivate = { onEvent(UsersListEvent.DeactivateUser(it.id)) },
                             onDelete = { onEvent(UsersListEvent.ShowDeleteConfirmation(it)) }
@@ -164,6 +192,15 @@ fun UsersManagementScreenContent(
         )
     }
 
+    if (state.showEditUserDialog && state.userToEdit != null) {
+        EditUserDialog(
+            state = state,
+            onEvent = onEvent,
+            onDismiss = { onEvent(UsersListEvent.HideEditUserDialog) }
+        )
+    }
+
+
     // Delete Confirmation Dialog
     if (state.showDeleteConfirmation && state.userToDelete != null) {
         DeleteConfirmationDialog(
@@ -177,6 +214,12 @@ fun UsersManagementScreenContent(
             onDismiss = {
                 onEvent(UsersListEvent.HideDeleteConfirmation)
             }
+        )
+    }
+    if (state.showLogsDialog) {
+        LogsDialog(
+            state = state,
+            onDismiss = { onEvent(UsersListEvent.HideLogsDialog) }
         )
     }
 }
@@ -851,4 +894,397 @@ fun AddUserDialog(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EditUserDialog(
+    state: UsersListState,
+    onEvent: (UsersListEvent) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val user = state.userToEdit ?: return
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Edit User",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Username field (editable)
+                OutlinedTextField(
+                    value = state.editUsername,
+                    onValueChange = { onEvent(UsersListEvent.UpdateEditUsername(it)) },
+                    label = { Text("Username") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Email field (disabled)
+                OutlinedTextField(
+                    value = user.email,
+                    onValueChange = { /* Read-only */ },
+                    label = { Text("Email") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    enabled = false,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                        disabledBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Role selection (editable)
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    ExposedDropdownMenuBox(
+                        expanded = state.isRoleDropdownExpanded,
+                        onExpandedChange = { onEvent(UsersListEvent.ToggleEditRoleDropdown(it)) }
+                    ) {
+                        OutlinedTextField(
+                            value = state.editRole ?: "",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Role") },
+                            modifier = Modifier
+                                .menuAnchor()
+                                .fillMaxWidth(),
+                            singleLine = true,
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = state.isRoleDropdownExpanded)
+                            }
+                        )
+
+                        ExposedDropdownMenu(
+                            expanded = state.isRoleDropdownExpanded,
+                            onDismissRequest = { onEvent(UsersListEvent.ToggleEditRoleDropdown(false)) }
+                        ) {
+                            state.rolesList.forEach { role ->
+                                DropdownMenuItem(
+                                    text = { Text(role) },
+                                    onClick = {
+                                        onEvent(UsersListEvent.UpdateEditRole(role))
+                                        onEvent(UsersListEvent.ToggleEditRoleDropdown(false))
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Status indicator (non-editable)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Status:",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Badge(
+                        containerColor = if (user.isActive) Color(0xFF4CAF50) else Color(0xFFE57373),
+                        contentColor = Color.White
+                    ) {
+                        Text(
+                            text = if (user.isActive) "Active" else "Inactive",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+
+                // Permissions section (editable)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Permissions",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // List of permissions with checkboxes
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp) // Fixed height for scrollable content
+                ) {
+                    LazyColumn {
+                        items(Permission.entries) { permission ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val isSelected = state.editPermissions.contains(permission)
+                                Checkbox(
+                                    checked = isSelected,
+                                    onCheckedChange = { isChecked ->
+                                        val updatedPermissions = if (isChecked) {
+                                            state.editPermissions + permission
+                                        } else {
+                                            state.editPermissions - permission
+                                        }
+                                        onEvent(UsersListEvent.UpdateEditPermissions(updatedPermissions))
+                                    }
+                                )
+                                Text(
+                                    text = permission.name.replace("_", " "),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Action buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel")
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Button(
+                        onClick = { onEvent(UsersListEvent.UpdateUser) },
+                        enabled = !state.isUpdateUserLoading &&
+                                state.editUsername.isNotBlank() &&
+                                state.editRole != null
+                    ) {
+                        if (state.isUpdateUserLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text("Update User")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+fun LogsDialog(
+    state: UsersListState,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 500.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "System Logs",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close"
+                        )
+                    }
+                }
+
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+                if (state.isLogsLoading) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(300.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                } else if (state.logsData.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(300.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No logs available")
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(400.dp)
+                    ) {
+                        items(state.logsData) { log ->
+                            LogCard(log)
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.End),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Close")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LogCard(log: AuditLogEntry) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = when (log.actionType) {
+                AuditActionType.USER_CREATED.name -> Color(0xFFE3F2FD) // Light Blue
+                AuditActionType.USER_UPDATED.name -> Color(0xFFFFF9C4) // Light Yellow
+                AuditActionType.USER_DELETED.name -> Color(0xFFFFEBEE) // Light Red
+                AuditActionType.USER_ACTIVATED.name -> Color(0xFFE8F5E9) // Light Green
+                AuditActionType.USER_DEACTIVATED.name -> Color(0xFFFCE4EC) // Light Pink
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            }
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Display action type with icon
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = when (log.actionType) {
+                            AuditActionType.USER_CREATED.name -> Icons.Default.PersonAdd
+                            AuditActionType.USER_UPDATED.name -> Icons.Default.Edit
+                            AuditActionType.USER_DELETED.name -> Icons.Default.Delete
+                            AuditActionType.USER_ACTIVATED.name -> Icons.Default.CheckCircle
+                            AuditActionType.USER_DEACTIVATED.name -> Icons.Default.Block
+                            else -> Icons.Default.Info
+                        },
+                        contentDescription = log.actionType,
+                        tint = when (log.actionType) {
+                            AuditActionType.USER_CREATED.name -> Color(0xFF2196F3) // Blue
+                            AuditActionType.USER_UPDATED.name -> Color(0xFFFBC02D) // Yellow
+                            AuditActionType.USER_DELETED.name -> Color(0xFFF44336) // Red
+                            AuditActionType.USER_ACTIVATED.name -> Color(0xFF4CAF50) // Green
+                            AuditActionType.USER_DEACTIVATED.name -> Color(0xFFE91E63) // Pink
+                            else -> MaterialTheme.colorScheme.primary
+                        },
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = log.actionType.replace("_", " "),
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+
+                // Display timestamp if available (sample format implementation)
+                Text(
+                    text = formatLogTimestamp(log.timestamp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Target user info
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Target: ",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = log.targetUsername,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+
+            // Performed by info
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "By: ",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = log.performedByUsername,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Full description
+            Text(
+                text = log.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+            )
+        }
+    }
+}
+
+fun formatLogTimestamp(timestamp: Long?): String {
+    if (timestamp == null) return "N/A"
+    val dateFormat = SimpleDateFormat("MMM d, yyyy 'at' h:mm a", Locale.getDefault())
+    return dateFormat.format(Date(timestamp))
 }

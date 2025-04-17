@@ -20,7 +20,7 @@ coilokhttp="3.1.0"
 accompanist = "0.24.13-rc"
 nanoid_version="2.0.0"
 gson="2.13.0"
-
+ehsannarmanicompose="0.1.2"
 
 [libraries]
 nanoid = { group = "com.aventrix.jnanoid", name = "jnanoid", version.ref = "nanoid_version" }
@@ -52,6 +52,7 @@ coil3 = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil3-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coilokhttp" }
 accompanist-pager = { module = "com.google.accompanist:accompanist-pager", version.ref = "accompanist" }
 gson-library = { module = "com.google.code.gson:gson", version.ref = "gson" }
+composecharts = { module = "io.github.ehsannarmani:compose-charts", version.ref = "ehsannarmanicompose" }
 
 
 [plugins]

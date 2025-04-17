@@ -34,4 +34,17 @@ sealed class UsersListEvent {
     data class UpdateUsername(val username: String) : UsersListEvent()
     data class UpdateEmail(val email: String) : UsersListEvent()
     data class ToggleShowPermissions(val show: Boolean) : UsersListEvent()
+
+    data class ShowEditUserDialog(val user: UserEntity) : UsersListEvent()
+    data object HideEditUserDialog : UsersListEvent()
+    data class UpdateEditUsername(val username: String) : UsersListEvent()
+    data class UpdateEditRole(val role: String) : UsersListEvent()
+    data class UpdateEditPermissions(val permissions: List<Permission>) : UsersListEvent()
+    data object UpdateUser : UsersListEvent()
+    data class ToggleEditRoleDropdown(val isExpanded: Boolean) : UsersListEvent()
+
+    data class ShowUserAuditLog(val user: UserEntity) : UsersListEvent()
+    data object ShowLogsDialog : UsersListEvent()
+    data object HideLogsDialog : UsersListEvent()
+    data object FetchAllLogs : UsersListEvent()
 }

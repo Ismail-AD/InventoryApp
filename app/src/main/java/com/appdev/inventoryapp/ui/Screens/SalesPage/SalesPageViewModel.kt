@@ -42,27 +42,34 @@ class SalesPageViewModel @Inject constructor(
             is SalesPageEvent.ShowStartDatePicker -> {
                 _state.update { it.copy(showStartDatePicker = true) }
             }
+
             is SalesPageEvent.HideStartDatePicker -> {
                 _state.update { it.copy(showStartDatePicker = false) }
             }
+
             is SalesPageEvent.ShowEndDatePicker -> {
                 _state.update { it.copy(showEndDatePicker = true) }
             }
+
             is SalesPageEvent.HideEndDatePicker -> {
                 _state.update { it.copy(showEndDatePicker = false) }
             }
+
             is SalesPageEvent.TempStartDateSelected -> {
                 _state.update { it.copy(tempStartDate = event.date) }
             }
+
             is SalesPageEvent.TempEndDateSelected -> {
                 _state.update { it.copy(tempEndDate = event.date) }
             }
+
             is SalesPageEvent.ApplyCustomDateRange -> {
                 val currentState = _state.value
                 if (currentState.tempStartDate != null && currentState.tempEndDate != null) {
                     setCustomDateRange(currentState.tempStartDate!!, currentState.tempEndDate!!)
                 }
             }
+
             is SalesPageEvent.CancelCustomDateRange -> {
                 // If we're cancelling during date selection, revert to All Time
                 if (_state.value.startDate == null || _state.value.endDate == null) {
@@ -85,16 +92,24 @@ class SalesPageViewModel @Inject constructor(
                 updateSortOrder(event.sortOrder)
                 _state.update { it.copy(isSortMenuExpanded = false) }
             }
+
             is SalesPageEvent.FilterByCategory -> {
                 filterByCategory(event.category)
                 _state.update { it.copy(isCategoryMenuExpanded = false) }
             }
+
             is SalesPageEvent.FetchCategories -> fetchCategories()
             is SalesPageEvent.ToggleSortMenu -> _state.update { it.copy(isSortMenuExpanded = event.isExpanded) }
             is SalesPageEvent.ToggleCategoryMenu -> _state.update { it.copy(isCategoryMenuExpanded = event.isExpanded) }
             is SalesPageEvent.AddToCart -> {
+                if (state.value.successMessage != null) {
+                    _state.update {
+                        it.copy(successMessage = null)
+                    }
+                }
                 val quantitySold = state.value.quantitySold.toIntOrNull() ?: 0
-                val availableQuantity = _state.value.inventoryItems.find { it.id == event.item.id }?.quantity ?: 0
+                val availableQuantity =
+                    _state.value.inventoryItems.find { it.id == event.item.id }?.quantity ?: 0
 
                 if (quantitySold > availableQuantity) {
                     _state.update {
@@ -124,6 +139,7 @@ class SalesPageViewModel @Inject constructor(
                     addItemToCart(item)
                 }
             }
+
             is SalesPageEvent.ToggleQrScanner -> _state.update { it.copy(isQrScannerActive = !it.isQrScannerActive) }
             is SalesPageEvent.DismissSuccessMessage -> _state.update { it.copy(showSuccessMessage = false) }
             is SalesPageEvent.QuantitySoldChanged -> _state.update { it.copy(quantitySold = event.quantity) }
@@ -145,8 +161,19 @@ class SalesPageViewModel @Inject constructor(
                     saveSaleToRepository(record)
                 }
             }
-            is SalesPageEvent.ShowConfirmationDialog -> _state.update { it.copy(showConfirmationDialog = true) }
-            is SalesPageEvent.DismissConfirmationDialog -> _state.update { it.copy(showConfirmationDialog = false) }
+
+            is SalesPageEvent.ShowConfirmationDialog -> _state.update {
+                it.copy(
+                    showConfirmationDialog = true
+                )
+            }
+
+            is SalesPageEvent.DismissConfirmationDialog -> _state.update {
+                it.copy(
+                    showConfirmationDialog = false
+                )
+            }
+
             is SalesPageEvent.ConfirmSale -> _state.update { it.copy(showConfirmationDialog = true) }
             is SalesPageEvent.ClearCart -> _state.update { it.copy(cartItems = emptyList()) }
 
@@ -161,19 +188,23 @@ class SalesPageViewModel @Inject constructor(
                     )
                 }
             }
+
             is SalesPageEvent.HideSaleDetail -> _state.update { it.copy(showDetailModal = false) }
             is SalesPageEvent.FilterByStatus -> {
                 filterByStatus(event.status)
                 _state.update { it.copy(isStatusMenuExpanded = false) }
             }
+
             is SalesPageEvent.FilterByDateRange -> {
                 filterByDateRange(event.rangeFilter)
                 _state.update { it.copy(isDateRangeMenuExpanded = false) }
             }
+
             is SalesPageEvent.SetCustomDateRange -> {
                 setCustomDateRange(event.startDate, event.endDate)
                 _state.update { it.copy(isDateRangeMenuExpanded = false) }
             }
+
             is SalesPageEvent.ToggleStatusMenu -> _state.update { it.copy(isStatusMenuExpanded = event.isExpanded) }
             is SalesPageEvent.ToggleDateRangeMenu -> _state.update { it.copy(isDateRangeMenuExpanded = event.isExpanded) }
         }
@@ -196,11 +227,15 @@ class SalesPageViewModel @Inject constructor(
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
 
-            repository.updateInventoryItems(salesRecord, mapOfProductData = state.value.itemQuantityMap).collect { result ->
+            repository.updateInventoryItems(
+                salesRecord,
+                mapOfProductData = state.value.itemQuantityMap
+            ).collect { result ->
                 when (result) {
                     is ResultState.Loading -> {
                         _state.update { it.copy(isLoading = true) }
                     }
+
                     is ResultState.Success -> {
                         _state.update {
                             it.copy(
@@ -214,6 +249,7 @@ class SalesPageViewModel @Inject constructor(
                         // Also refresh sales history after successful sale
                         loadSalesHistory(sessionManagement.getShopId())
                     }
+
                     is ResultState.Failure -> {
                         _state.update {
                             it.copy(
@@ -222,6 +258,7 @@ class SalesPageViewModel @Inject constructor(
                             )
                         }
                     }
+
                     else -> {}
                 }
             }
@@ -265,6 +302,7 @@ class SalesPageViewModel @Inject constructor(
                         is ResultState.Loading -> {
                             _state.update { it.copy(isLoading = true) }
                         }
+
                         is ResultState.Success -> {
                             _state.update {
                                 it.copy(
@@ -273,6 +311,7 @@ class SalesPageViewModel @Inject constructor(
                                 )
                             }
                         }
+
                         is ResultState.Failure -> {
                             _state.update {
                                 it.copy(
@@ -282,6 +321,7 @@ class SalesPageViewModel @Inject constructor(
                                 )
                             }
                         }
+
                         else -> {}
                     }
                 }
@@ -310,6 +350,7 @@ class SalesPageViewModel @Inject constructor(
                     is ResultState.Loading -> {
                         _state.update { it.copy(isLoading = true) }
                     }
+
                     is ResultState.Success -> {
                         _state.update {
                             it.copy(
@@ -321,6 +362,7 @@ class SalesPageViewModel @Inject constructor(
                         }
                         applyFilters()
                     }
+
                     is ResultState.Failure -> {
                         _state.update {
                             it.copy(
@@ -329,6 +371,7 @@ class SalesPageViewModel @Inject constructor(
                             )
                         }
                     }
+
                     else -> {}
                 }
             }
@@ -399,6 +442,7 @@ class SalesPageViewModel @Inject constructor(
                     is ResultState.Loading -> {
                         _state.update { it.copy(isLoading = true) }
                     }
+
                     is ResultState.Success -> {
                         _state.update {
                             it.copy(
@@ -410,6 +454,7 @@ class SalesPageViewModel @Inject constructor(
                         }
                         applySalesHistoryFilters()
                     }
+
                     is ResultState.Failure -> {
                         _state.update {
                             it.copy(
@@ -418,6 +463,7 @@ class SalesPageViewModel @Inject constructor(
                             )
                         }
                     }
+
                     else -> {}
                 }
             }
@@ -449,6 +495,7 @@ class SalesPageViewModel @Inject constructor(
                     )
                 }
             }
+
             DateRangeFilter.WEEK -> {
                 calendar.set(Calendar.DAY_OF_WEEK, calendar.firstDayOfWeek)
                 calendar.set(Calendar.HOUR_OF_DAY, 0)
@@ -465,6 +512,7 @@ class SalesPageViewModel @Inject constructor(
                     )
                 }
             }
+
             DateRangeFilter.MONTH -> {
                 calendar.set(Calendar.DAY_OF_MONTH, 1)
                 calendar.set(Calendar.HOUR_OF_DAY, 0)
@@ -481,6 +529,7 @@ class SalesPageViewModel @Inject constructor(
                     )
                 }
             }
+
             DateRangeFilter.YEAR -> {
                 calendar.set(Calendar.DAY_OF_YEAR, 1)
                 calendar.set(Calendar.HOUR_OF_DAY, 0)
@@ -497,6 +546,7 @@ class SalesPageViewModel @Inject constructor(
                     )
                 }
             }
+
             DateRangeFilter.ALL -> {
                 _state.update {
                     it.copy(
@@ -506,6 +556,7 @@ class SalesPageViewModel @Inject constructor(
                     )
                 }
             }
+
             DateRangeFilter.CUSTOM -> {
                 // Do nothing here, as custom dates are set via SetCustomDateRange event
                 _state.update { it.copy(dateRangeFilter = rangeFilter) }

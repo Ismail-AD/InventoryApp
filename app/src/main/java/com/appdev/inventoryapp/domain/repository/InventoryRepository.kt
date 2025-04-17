@@ -42,4 +42,7 @@ interface InventoryRepository {
     fun addCategory(category: Category): Flow<ResultState<String>>
     fun fetchCategories(shopId: String): Flow<ResultState<List<Category>>>
 
+
+
+
 }

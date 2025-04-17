@@ -78,7 +78,7 @@ fun MainScreen() {
             label = "Sales"
         ),
         BottomNavItem(
-            route = "reports",
+            route = Routes.ReportsAndAnalytics.route,
             icon = { Icon(Icons.Default.BarChart, contentDescription = "Reports") },
             label = "Reports"
         ),
