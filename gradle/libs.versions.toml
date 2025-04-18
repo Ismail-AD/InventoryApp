@@ -21,7 +21,7 @@ accompanist = "0.24.13-rc"
 nanoid_version="2.0.0"
 gson="2.13.0"
 ehsannarmanicompose="0.1.2"
-
+work_runtime="2.9.0"
 [libraries]
 nanoid = { group = "com.aventrix.jnanoid", name = "jnanoid", version.ref = "nanoid_version" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -53,6 +53,7 @@ coil3-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", versio
 accompanist-pager = { module = "com.google.accompanist:accompanist-pager", version.ref = "accompanist" }
 gson-library = { module = "com.google.code.gson:gson", version.ref = "gson" }
 composecharts = { module = "io.github.ehsannarmani:compose-charts", version.ref = "ehsannarmanicompose" }
+worker = { module = "androidx.work:work-runtime-ktx", version.ref = "work_runtime" }
 
 
 [plugins]

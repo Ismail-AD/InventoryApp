@@ -10,11 +10,12 @@ interface SignUpRepository {
     suspend fun signup(
         email: String,
         password: String,
-        shopName: String
     ): Flow<ResultState<UserSession?>>
 
     fun insertUser(
         userEntity: UserEntity,
     ): Flow<ResultState<String>>
     fun getCurrentUserId(): String?
+    suspend fun checkEmailExists(email: String): Flow<ResultState<Boolean>>
+
 }

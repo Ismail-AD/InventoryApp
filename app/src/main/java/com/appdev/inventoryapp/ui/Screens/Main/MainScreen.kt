@@ -4,9 +4,8 @@ import android.net.Uri
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inventory
-import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.SupervisedUserCircle
 import androidx.compose.material3.Icon
@@ -17,15 +16,11 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -33,7 +28,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.appdev.inventoryapp.domain.model.BottomNavItem
-import com.appdev.inventoryapp.domain.model.CartData
 import com.appdev.inventoryapp.domain.model.InventoryItem
 import com.appdev.inventoryapp.navigation.Routes
 import com.appdev.inventoryapp.ui.Screens.CartSummary.CartSummaryScreen
@@ -41,13 +35,12 @@ import com.appdev.inventoryapp.ui.Screens.Inventory.InventoryScreen
 import com.appdev.inventoryapp.ui.Screens.InventoryManagemnt.AddInventoryItemRoot
 import com.appdev.inventoryapp.ui.Screens.InventoryManagemnt.AddInventoryItemViewModel
 import com.appdev.inventoryapp.ui.Screens.ProductDetails.ProductDetailScreen
-import com.appdev.inventoryapp.ui.Screens.Profile.ProfileScreen
 import com.appdev.inventoryapp.ui.Screens.Reports.ReportsScreen
-import com.appdev.inventoryapp.ui.Screens.Sales.SalesScreen
 import com.appdev.inventoryapp.ui.Screens.SalesEntry.SalesEntryScreen
 import com.appdev.inventoryapp.ui.Screens.SalesHistory.SalesHistoryScreen
 import com.appdev.inventoryapp.ui.Screens.SalesPage.SalesPageScreen
 import com.appdev.inventoryapp.ui.Screens.SalesPage.SalesPageViewModel
+import com.appdev.inventoryapp.ui.Screens.Settings.SettingsScreen
 import com.appdev.inventoryapp.ui.Screens.UserManagement.UsersManagementScreen
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -86,7 +79,13 @@ fun MainScreen() {
             route = Routes.UserManagement.route,
             icon = { Icon(Icons.Default.SupervisedUserCircle, contentDescription = "More") },
             label = "Staff"
+        ),
+        BottomNavItem(
+            route = Routes.Settings.route,
+            icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
+            label = "Settings"
         )
+
     )
 
     Scaffold(
@@ -202,8 +201,14 @@ fun MainScreen() {
             composable(Routes.UserManagement.route) {
                 UsersManagementScreen { }
             }
-            composable(Routes.Profile.route) {
-                ProfileScreen()
+            composable(Routes.Settings.route) {
+                SettingsScreen{
+                    navController.navigate(Routes.Login.route) {
+                        popUpTo(navController.graph.startDestinationId) {
+                            inclusive = true
+                        }
+                    }
+                }
             }
             composable(
                 route = Routes.ProductDetail.route + "/{productJson}",
@@ -259,7 +264,7 @@ fun BottomNavigation(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    NavigationBar {
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceVariant) {
         items.forEach { item ->
             NavigationBarItem(
                 icon = { item.icon() },
@@ -282,7 +287,7 @@ fun BottomNavigation(
                     selectedTextColor = MaterialTheme.colorScheme.primary, // Change text color when selected
                     indicatorColor = MaterialTheme.colorScheme.primaryContainer,
                     unselectedIconColor = MaterialTheme.colorScheme.inversePrimary,
-                    unselectedTextColor = MaterialTheme.colorScheme.inversePrimary
+                    unselectedTextColor = MaterialTheme.colorScheme.inversePrimary,
                 )
             )
         }

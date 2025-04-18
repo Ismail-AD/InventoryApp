@@ -171,7 +171,6 @@ class SignupViewModel @Inject constructor(
         return "SHOP-${System.currentTimeMillis()}-${(1000..9999).random()}"
     }
 
-
     private fun signup() {
         val currentState = _state.value
 
@@ -239,35 +238,67 @@ class SignupViewModel @Inject constructor(
         // Show loading
         _state.update { it.copy(isLoading = true, errorMessage = null) }
 
+        // First check if email already exists
         viewModelScope.launch {
-
-            signupRepository.signup(
-                email = currentState.email,
-                password = currentState.password,
-                shopName = currentState.shopName
-            )
-                .collect { result ->
-                    _state.update {
-                        when (result) {
-                            is ResultState.Success -> {
-                                result.data?.let { session ->
-                                    saveUserSession(session)
-                                    Log.d("SupabaseRepository", "Profile creation START FROM MODEL")
-                                    it.copy(signupSuccess = true, userSession = session)
-                                } ?: it.copy(isLoading = false, errorMessage = "Session data is null")
+            signupRepository.checkEmailExists(currentState.email.trim().lowercase()).collect { result ->
+                when (result) {
+                    is ResultState.Success -> {
+                        if (result.data) {
+                            // Email already exists
+                            _state.update {
+                                it.copy(
+                                    isEmailError = true,
+                                    errorMessage = "Email already exists. Please use a different email address.",
+                                    isLoading = false
+                                )
                             }
-
-                            is ResultState.Failure -> it.copy(
+                        } else {
+                            // Email doesn't exist, proceed with signup
+                            proceedWithSignup(currentState)
+                        }
+                    }
+                    is ResultState.Failure -> {
+                        _state.update {
+                            it.copy(
                                 isLoading = false,
                                 errorMessage = result.message.localizedMessage
                             )
-
-                            is ResultState.Loading -> it.copy(isLoading = true)
                         }
                     }
+                    is ResultState.Loading -> {
+                        // Already in loading state
+                    }
                 }
+            }
         }
     }
+
+    private fun proceedWithSignup(currentState: SignupState) {
+        viewModelScope.launch {
+            signupRepository.signup(
+                email = currentState.email,
+                password = currentState.password,
+            ).collect { result ->
+                _state.update {
+                    when (result) {
+                        is ResultState.Success -> {
+                            result.data?.let { session ->
+                                saveUserSession(session)
+                                Log.d("SupabaseRepository", "Profile creation START FROM MODEL")
+                                it.copy(signupSuccess = true, userSession = session)
+                            } ?: it.copy(isLoading = false, errorMessage = "Session data is null")
+                        }
+                        is ResultState.Failure -> it.copy(
+                            isLoading = false,
+                            errorMessage = result.message.localizedMessage
+                        )
+                        is ResultState.Loading -> it.copy(isLoading = true)
+                    }
+                }
+            }
+        }
+    }
+
 
     private fun isValidEmail(email: String): Boolean {
         return android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()

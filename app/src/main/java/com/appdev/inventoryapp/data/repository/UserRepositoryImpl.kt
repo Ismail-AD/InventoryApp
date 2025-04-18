@@ -7,6 +7,8 @@ import com.appdev.inventoryapp.Utils.UserRole
 import com.appdev.inventoryapp.domain.model.UserEntity
 import com.appdev.inventoryapp.domain.repository.UserRepository
 import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.auth.SignOutScope
+import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -19,6 +21,79 @@ class UserRepositoryImpl @Inject constructor(
     companion object {
         private const val TAG = "UserRepositoryImpl"
         private const val USERS_TABLE = "users"
+    }
+
+    override fun logout(): Flow<ResultState<Boolean>> = flow {
+        emit(ResultState.Loading)
+        try {
+            // Sign out from Supabase
+            // SignOutScope.GLOBAL will invalidate all session tokens for this user
+            supabase.auth.signOut(SignOutScope.GLOBAL)
+            emit(ResultState.Success(true))
+        } catch (e: Exception) {
+            emit(ResultState.Failure(e))
+        }
+    }
+
+    override suspend fun updateUserName(
+        userId: String,
+        userName: String
+    ): Flow<ResultState<Boolean>> = flow {
+        emit(ResultState.Loading)
+        try {
+            supabase.from(USERS_TABLE)
+                .update({
+                    set("username", userName)
+                }) {
+                    filter {
+                        eq("id", userId)
+                    }
+                }
+            emit(ResultState.Success(true))
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update user name: ${e.message}", e)
+            emit(ResultState.Failure(e))
+        }
+    }
+
+    override suspend fun updateShopName(
+        userId: String,
+        shopName: String
+    ): Flow<ResultState<Boolean>> = flow {
+        emit(ResultState.Loading)
+        try {
+            supabase.from(USERS_TABLE)
+                .update({
+                    set("shopName", shopName)
+                }) {
+                    filter {
+                        eq("id", userId)
+                    }
+                }
+            emit(ResultState.Success(true))
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update shop name: ${e.message}", e)
+            emit(ResultState.Failure(e))
+        }
+    }
+
+    override suspend fun checkShopNameExists(shopName: String): Flow<ResultState<Boolean>> = flow {
+        emit(ResultState.Loading)
+        try {
+            val existingShops = supabase.from(USERS_TABLE)
+                .select {
+                    filter {
+                        eq("shopName", shopName.trim())
+                    }
+                }
+                .decodeList<UserEntity>()
+
+            val shopNameExists = existingShops.isNotEmpty()
+            emit(ResultState.Success(shopNameExists))
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to check shop name existence: ${e.message}", e)
+            emit(ResultState.Failure(e))
+        }
     }
 
     override suspend fun checkEmailExists(email: String): Flow<ResultState<Boolean>> = flow {
@@ -40,14 +115,17 @@ class UserRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getAllUsers(shopId: String, userId: String): Flow<ResultState<List<UserEntity>>> = flow {
+    override suspend fun getAllUsers(
+        shopId: String,
+        userId: String
+    ): Flow<ResultState<List<UserEntity>>> = flow {
         emit(ResultState.Loading)
         try {
             val users = supabase.from(USERS_TABLE)
                 .select {
                     filter {
                         eq("shop_id", shopId)
-                        neq("id",userId)
+                        neq("id", userId)
                     }
                 }
                 .decodeList<UserEntity>()
@@ -186,7 +264,6 @@ class UserRepositoryImpl @Inject constructor(
             emit(ResultState.Failure(e))
         }
     }
-
 
 
 }

@@ -2,6 +2,7 @@ package com.appdev.inventoryapp.data.repository
 
 import android.net.Uri
 import android.util.Log
+import com.appdev.inventoryapp.Utils.NotificationUtils
 import com.appdev.inventoryapp.Utils.ResultState
 import com.appdev.inventoryapp.domain.model.Category
 import com.appdev.inventoryapp.domain.model.InventoryItem
@@ -66,10 +67,12 @@ class InventoryRepositoryImpl @Inject constructor(
                 for (saleItem in salesRecord.salesRecordItem) {
                     // Update the inventory item - only updating quantity and discount fields
                     val quantityAvailable = mapOfProductData[saleItem.productId] ?: 0
+                    val newQuantity = abs(saleItem.quantity - quantityAvailable)
+
                     supabase.from("inventory").update(
                         {
                             // Decrease the available quantity by the sold quantity
-                            set("quantity", abs(saleItem.quantity - quantityAvailable))
+                            set("quantity", newQuantity)
                             // Update discount information
                             set("discount", saleItem.discountAmount)
                             set("discountType", saleItem.isPercentageDiscount)

@@ -92,6 +92,7 @@ dependencies {
     implementation(libs.hilt.android)
     implementation(libs.coil3)
     implementation(libs.nanoid)
+    implementation(libs.worker)
     implementation(libs.composecharts)
     implementation(libs.gson.library)
     implementation(libs.coil3.network.okhttp)

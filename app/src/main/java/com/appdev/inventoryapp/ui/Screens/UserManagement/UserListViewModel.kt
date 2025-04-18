@@ -43,7 +43,7 @@ class UsersListViewModel @Inject constructor(
         }
     }
 
-   fun getUserRole():String {
+    fun getUserRole(): String {
         return sessionManagement.getUserRole() ?: "View Only"
     }
 
@@ -59,9 +59,9 @@ class UsersListViewModel @Inject constructor(
 
             // Create a comprehensive description with all details
             val description = buildString {
-                append("${actionType.name} - User ${targetUser.username} ")
+                append("${actionType.name} - User")
                 append("(email: ${targetUser.email}, role: ${targetUser.role}) ")
-                append("by $performedBy at $formattedTime")
+                append("at $formattedTime")
 
                 if (changes.isNotEmpty()) {
                     append(". Changes: ${changes.joinToString("; ")}")
@@ -81,8 +81,12 @@ class UsersListViewModel @Inject constructor(
             auditLogRepository.createAuditLog(auditEntry).collect { result ->
                 when (result) {
                     is ResultState.Failure -> {
-                        Log.e("AUDIT_LOG", "Failed to create audit log: ${result.message.localizedMessage}")
+                        Log.e(
+                            "AUDIT_LOG",
+                            "Failed to create audit log: ${result.message.localizedMessage}"
+                        )
                     }
+
                     else -> {}
                 }
             }
@@ -105,9 +109,11 @@ class UsersListViewModel @Inject constructor(
                 is UsersListEvent.ShowLogsDialog -> {
                     _state.update { it.copy(showLogsDialog = true) }
                 }
+
                 is UsersListEvent.HideLogsDialog -> {
                     _state.update { it.copy(showLogsDialog = false) }
                 }
+
                 is UsersListEvent.FetchAllLogs -> {
                     _state.update { it.copy(isLogsLoading = true) }
 
@@ -116,13 +122,26 @@ class UsersListViewModel @Inject constructor(
                     auditLogRepository.getAuditLogsForUser(shopId).collect { result ->
                         when (result) {
                             is ResultState.Success -> {
+                                val processedLogs = result.data.map { logEntry ->
+                                    // Update the description for each log entry
+                                    val updatedDescription = updateLogString(
+                                        originalString = logEntry.description,
+                                        targetUserName = logEntry.targetUsername,
+                                        performedByName = logEntry.performedByUsername
+                                    )
+
+                                    // Return a copy of the log entry with the updated description
+                                    logEntry.copy(description = updatedDescription)
+                                }
+
                                 _state.update {
                                     it.copy(
-                                        logsData = result.data,
+                                        logsData = processedLogs,
                                         isLogsLoading = false
                                     )
                                 }
                             }
+
                             is ResultState.Failure -> {
                                 _state.update {
                                     it.copy(
@@ -131,6 +150,7 @@ class UsersListViewModel @Inject constructor(
                                     )
                                 }
                             }
+
                             is ResultState.Loading -> {
                                 // Already in loading state
                             }
@@ -221,6 +241,7 @@ class UsersListViewModel @Inject constructor(
 
                                     handleEvent(UsersListEvent.RefreshUsers)
                                 }
+
                                 is ResultState.Failure -> {
                                     _state.update {
                                         it.copy(
@@ -229,6 +250,7 @@ class UsersListViewModel @Inject constructor(
                                         )
                                     }
                                 }
+
                                 is ResultState.Loading -> {
                                     // Already in loading state
                                 }
@@ -253,9 +275,11 @@ class UsersListViewModel @Inject constructor(
                                 }
                                 handleEvent(UsersListEvent.RefreshUsers)
                             }
+
                             is ResultState.Failure -> {
                                 _state.update { it.copy(error = result.message.localizedMessage) }
                             }
+
                             is ResultState.Loading -> {
                                 _state.update { it.copy(isLoading = true) }
                             }
@@ -279,9 +303,11 @@ class UsersListViewModel @Inject constructor(
                                 }
                                 handleEvent(UsersListEvent.RefreshUsers)
                             }
+
                             is ResultState.Failure -> {
                                 _state.update { it.copy(error = result.message.localizedMessage) }
                             }
+
                             is ResultState.Loading -> {
                                 _state.update { it.copy(isLoading = true) }
                             }
@@ -305,19 +331,25 @@ class UsersListViewModel @Inject constructor(
                                     )
                                 }
 
-                                _state.update { it.copy(
-                                    isDeleteLoading = false,
-                                    showDeleteConfirmation = false,
-                                    userToDelete = null
-                                ) }
+                                _state.update {
+                                    it.copy(
+                                        isDeleteLoading = false,
+                                        showDeleteConfirmation = false,
+                                        userToDelete = null
+                                    )
+                                }
                                 handleEvent(UsersListEvent.RefreshUsers)
                             }
+
                             is ResultState.Failure -> {
-                                _state.update { it.copy(
-                                    error = result.message.localizedMessage,
-                                    isDeleteLoading = false
-                                ) }
+                                _state.update {
+                                    it.copy(
+                                        error = result.message.localizedMessage,
+                                        isDeleteLoading = false
+                                    )
+                                }
                             }
+
                             is ResultState.Loading -> {
                                 // Loading state is already set above
                             }
@@ -356,39 +388,63 @@ class UsersListViewModel @Inject constructor(
                                             )
 
                                             // Call repository method to create user
-                                            userRepository.createUser(newUser).collect { createResult ->
-                                                when (createResult) {
-                                                    is ResultState.Success -> {
-                                                        // Create audit log entry for new user creation
-                                                        val details = listOf(
-                                                            "Role: ${newUser.role}",
-                                                            "Permissions: ${newUser.permissions?.joinToString(", ") ?: "none"}"
-                                                        )
+                                            userRepository.createUser(newUser)
+                                                .collect { createResult ->
+                                                    when (createResult) {
+                                                        is ResultState.Success -> {
+                                                            // Create audit log entry for new user creation
+                                                            val details = listOf(
+                                                                "Role: ${newUser.role}",
+                                                                "Permissions: ${
+                                                                    newUser.permissions?.joinToString(
+                                                                        ", "
+                                                                    ) ?: "none"
+                                                                }"
+                                                            )
 
-                                                        createAuditLog(
-                                                            AuditActionType.USER_CREATED,
-                                                            newUser,
-                                                            details
-                                                        )
+                                                            createAuditLog(
+                                                                AuditActionType.USER_CREATED,
+                                                                newUser,
+                                                                details
+                                                            )
 
-                                                        _state.update { it.copy(showAddUserDialog = false, isAddUserButtonLoading = false) }
-                                                        handleEvent(UsersListEvent.RefreshUsers)
-                                                    }
-                                                    is ResultState.Failure -> {
-                                                        _state.update { it.copy(error = createResult.message.localizedMessage, isAddUserButtonLoading = false) }
-                                                    }
-                                                    is ResultState.Loading -> {
-                                                        // Already in loading state
+                                                            _state.update {
+                                                                it.copy(
+                                                                    showAddUserDialog = false,
+                                                                    isAddUserButtonLoading = false
+                                                                )
+                                                            }
+                                                            handleEvent(UsersListEvent.RefreshUsers)
+                                                        }
+
+                                                        is ResultState.Failure -> {
+                                                            _state.update {
+                                                                it.copy(
+                                                                    error = createResult.message.localizedMessage,
+                                                                    isAddUserButtonLoading = false
+                                                                )
+                                                            }
+                                                        }
+
+                                                        is ResultState.Loading -> {
+                                                            // Already in loading state
+                                                        }
                                                     }
                                                 }
-                                            }
                                         }
                                     }
                                 }
                             }
+
                             is ResultState.Failure -> {
-                                _state.update { it.copy(error = result.message.localizedMessage, isAddUserButtonLoading = false) }
+                                _state.update {
+                                    it.copy(
+                                        error = result.message.localizedMessage,
+                                        isAddUserButtonLoading = false
+                                    )
+                                }
                             }
+
                             is ResultState.Loading -> {
                                 // Already in loading state
                             }
@@ -418,6 +474,7 @@ class UsersListViewModel @Inject constructor(
                                     )
                                 }
                             }
+
                             is ResultState.Failure -> {
                                 _state.update {
                                     it.copy(
@@ -426,13 +483,13 @@ class UsersListViewModel @Inject constructor(
                                     )
                                 }
                             }
+
                             is ResultState.Loading -> {
                                 // Already in loading state
                             }
                         }
                     }
                 }
-
 
 
                 is UsersListEvent.HideEditUserDialog -> {
@@ -521,6 +578,7 @@ class UsersListViewModel @Inject constructor(
                         ).collect { result ->
                             when (result) {
                                 is ResultState.Success -> {
+
                                     _state.update {
                                         it.copy(
                                             users = result.data,
@@ -589,14 +647,79 @@ class UsersListViewModel @Inject constructor(
                 }
 
 
-
             }
         }
     }
 
+
+
     private fun checkDuplicateEmail(email: String): Boolean {
         return _state.value.users.any {
             it.email.equals(email, ignoreCase = true)
+        }
+    }
+
+    fun updateLogString(
+        originalString: String,
+        targetUserName: String,
+        performedByName: String
+    ): String {
+        // Insert target username after "User" keyword and before the parenthesis
+        val userKeywordIndex = originalString.indexOf("User")
+
+        val firstPartWithUsername = if (userKeywordIndex != -1) {
+            val afterUserInsertPosition = userKeywordIndex + "User".length
+            originalString.substring(0, afterUserInsertPosition) +
+                    " $targetUserName" +
+                    originalString.substring(afterUserInsertPosition)
+        } else {
+            originalString
+        }
+
+        // Find the timestamp pattern to correctly position "by performedBy"
+        val timePattern = "at \\w+ \\d+, \\d{4} at \\d+:\\d+ [AP]M"
+        val regex = timePattern.toRegex()
+        val matchResult = regex.find(firstPartWithUsername)
+
+        return if (matchResult != null) {
+            val timeEndIndex = matchResult.range.last + 1
+
+            // Check if there's additional content (like "Changes:") after the timestamp
+            val periodIndex = firstPartWithUsername.indexOf(".", timeEndIndex)
+
+            if (periodIndex != -1) {
+                // Insert "by performedBy" before the period that starts additional content
+                firstPartWithUsername.substring(0, periodIndex) +
+                        " by $performedByName" +
+                        firstPartWithUsername.substring(periodIndex)
+            } else {
+                // No additional content, append "by performedBy" at the end
+                "${firstPartWithUsername} by $performedByName"
+            }
+        } else {
+            // Fallback if timestamp pattern not found: try to find just "at" near the end
+            val atIndex = firstPartWithUsername.lastIndexOf("at ")
+
+            if (atIndex != -1) {
+                // Look for natural breakpoints after the timestamp
+                val possibleBreakpoints = listOf(". ", ", ", " - ")
+                val breakpointIndex = possibleBreakpoints.mapNotNull {
+                    val idx = firstPartWithUsername.indexOf(it, atIndex)
+                    if (idx != -1) idx else null
+                }.minOrNull()
+
+                if (breakpointIndex != null) {
+                    firstPartWithUsername.substring(0, breakpointIndex) +
+                            " by $performedByName" +
+                            firstPartWithUsername.substring(breakpointIndex)
+                } else {
+                    // No obvious breakpoint, just append at the end
+                    "$firstPartWithUsername by $performedByName"
+                }
+            } else {
+                // No "at" found, just append at the end
+                "$firstPartWithUsername by $performedByName"
+            }
         }
     }
 

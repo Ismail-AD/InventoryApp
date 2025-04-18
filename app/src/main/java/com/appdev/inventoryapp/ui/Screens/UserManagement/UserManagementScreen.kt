@@ -1106,7 +1106,10 @@ fun LogsDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = 500.dp),
-            shape = RoundedCornerShape(16.dp)
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
         ) {
             Column(
                 modifier = Modifier
@@ -1134,33 +1137,37 @@ fun LogsDialog(
 
                 Divider(modifier = Modifier.padding(vertical = 8.dp))
 
-                if (state.isLogsLoading) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(300.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
+                when {
+                    state.isLogsLoading -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(300.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
                     }
-                } else if (state.logsData.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(300.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("No logs available")
+                    state.logsData.isEmpty() -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(300.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("No logs available")
+                        }
                     }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(400.dp)
-                    ) {
-                        items(state.logsData) { log ->
-                            LogCard(log)
-                            Spacer(modifier = Modifier.height(8.dp))
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(400.dp)
+                        ) {
+                            items(state.logsData) { log ->
+                                LogCard(log)
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
                         }
                     }
                 }
@@ -1186,14 +1193,8 @@ fun LogCard(log: AuditLogEntry) {
             .fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(
-            containerColor = when (log.actionType) {
-                AuditActionType.USER_CREATED.name -> Color(0xFFE3F2FD) // Light Blue
-                AuditActionType.USER_UPDATED.name -> Color(0xFFFFF9C4) // Light Yellow
-                AuditActionType.USER_DELETED.name -> Color(0xFFFFEBEE) // Light Red
-                AuditActionType.USER_ACTIVATED.name -> Color(0xFFE8F5E9) // Light Green
-                AuditActionType.USER_DEACTIVATED.name -> Color(0xFFFCE4EC) // Light Pink
-                else -> MaterialTheme.colorScheme.surfaceVariant
-            }
+            // Different background color for detail items
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
         )
     ) {
         Column(
@@ -1201,45 +1202,26 @@ fun LogCard(log: AuditLogEntry) {
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Display action type with icon
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = when (log.actionType) {
-                            AuditActionType.USER_CREATED.name -> Icons.Default.PersonAdd
-                            AuditActionType.USER_UPDATED.name -> Icons.Default.Edit
-                            AuditActionType.USER_DELETED.name -> Icons.Default.Delete
-                            AuditActionType.USER_ACTIVATED.name -> Icons.Default.CheckCircle
-                            AuditActionType.USER_DEACTIVATED.name -> Icons.Default.Block
-                            else -> Icons.Default.Info
-                        },
-                        contentDescription = log.actionType,
-                        tint = when (log.actionType) {
-                            AuditActionType.USER_CREATED.name -> Color(0xFF2196F3) // Blue
-                            AuditActionType.USER_UPDATED.name -> Color(0xFFFBC02D) // Yellow
-                            AuditActionType.USER_DELETED.name -> Color(0xFFF44336) // Red
-                            AuditActionType.USER_ACTIVATED.name -> Color(0xFF4CAF50) // Green
-                            AuditActionType.USER_DEACTIVATED.name -> Color(0xFFE91E63) // Pink
-                            else -> MaterialTheme.colorScheme.primary
-                        },
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = log.actionType.replace("_", " "),
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
-
-                // Display timestamp if available (sample format implementation)
+            // Display action type with icon
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = when (log.actionType) {
+                        AuditActionType.USER_CREATED.name -> Icons.Default.PersonAdd
+                        AuditActionType.USER_UPDATED.name -> Icons.Default.Edit
+                        AuditActionType.USER_DELETED.name -> Icons.Default.Delete
+                        AuditActionType.USER_ACTIVATED.name -> Icons.Default.CheckCircle
+                        AuditActionType.USER_DEACTIVATED.name -> Icons.Default.Block
+                        else -> Icons.Default.Info
+                    },
+                    contentDescription = log.actionType,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = formatLogTimestamp(log.timestamp),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    text = log.actionType.replace("_", " "),
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium
                 )
             }
 
@@ -1272,6 +1254,15 @@ fun LogCard(log: AuditLogEntry) {
             }
 
             Spacer(modifier = Modifier.height(8.dp))
+
+            // Display timestamp in the bottom section
+            Text(
+                text = formatLogTimestamp(log.timestamp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
 
             // Full description
             Text(

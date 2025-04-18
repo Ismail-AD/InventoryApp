@@ -7,6 +7,6 @@ import kotlinx.coroutines.flow.Flow
 
 interface LoginRepository {
     suspend fun login(email: String, password: String): Flow<ResultState<UserSession?>>
-    suspend fun fetchUserInfo(): Flow<ResultState<UserEntity>>
+    suspend fun fetchUserInfo(email: String): Flow<ResultState<UserEntity>>
     fun getCurrentUserId(): String?
 }

@@ -16,10 +16,27 @@ class SignUpRepositoryImpl @Inject constructor(
     private val supabase: io.github.jan.supabase.SupabaseClient
 ) : SignUpRepository {
 
+    override suspend fun checkEmailExists(email: String): Flow<ResultState<Boolean>> = flow {
+        emit(ResultState.Loading)
+        try {
+            val existingUsers = supabase.from("users")
+                .select {
+                    filter {
+                        eq("email", email.trim().lowercase())
+                    }
+                }
+                .decodeList<UserEntity>()
+
+            val emailExists = existingUsers.isNotEmpty()
+            emit(ResultState.Success(emailExists))
+        } catch (e: Exception) {
+            emit(ResultState.Failure(e))
+        }
+    }
+
     override suspend fun signup(
         email: String,
-        password: String,
-        shopName: String
+        password: String
     ): Flow<ResultState<UserSession?>> = flow {
         emit(ResultState.Loading)
         try {

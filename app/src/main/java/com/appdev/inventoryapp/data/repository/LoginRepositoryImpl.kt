@@ -28,20 +28,18 @@ class LoginRepositoryImpl @Inject constructor(val supabase: SupabaseClient,
         }
     }
 
-    override suspend fun fetchUserInfo(): Flow<ResultState<UserEntity>> = flow {
-        getCurrentUserId()?.let { uid ->
+    override suspend fun fetchUserInfo(email: String): Flow<ResultState<UserEntity>> = flow {
             emit(ResultState.Loading)
             try {
                 val user = supabase.from("users").select {
                     filter {
-                        eq("id", uid)
+                        eq("email", email)
                     }
                 }.decodeSingle<UserEntity>()
                 emit(ResultState.Success(user))
             } catch (e: Exception) {
                 emit(ResultState.Failure(e))
             }
-        }
     }
     override fun getCurrentUserId(): String? {
         return supabase.auth.currentUserOrNull()?.id

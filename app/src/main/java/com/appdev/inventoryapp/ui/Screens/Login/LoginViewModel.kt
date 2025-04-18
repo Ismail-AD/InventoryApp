@@ -1,18 +1,18 @@
 package com.appdev.inventoryapp.ui.Screens.Login
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.appdev.inventoryapp.Utils.ResultState
 import com.appdev.inventoryapp.Utils.SessionManagement
 import com.appdev.inventoryapp.domain.model.UserEntity
 import com.appdev.inventoryapp.domain.repository.LoginRepository
+import com.appdev.inventoryapp.domain.repository.SignUpRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.jan.supabase.auth.user.UserSession
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -20,6 +20,7 @@ import javax.inject.Inject
 @HiltViewModel
 class LoginViewModel @Inject constructor(
     private val loginRepository: LoginRepository,
+    private val signUpRepository: SignUpRepository,
     private val sessionManagement: SessionManagement
 ) : ViewModel() {
 
@@ -114,6 +115,7 @@ class LoginViewModel @Inject constructor(
         _state.update { it.copy(isLoading = true, errorMessage = null) }
 
         viewModelScope.launch {
+            // First attempt normal login
             loginRepository.login(currentState.email, currentState.password)
                 .collect { result ->
                     when (result) {
@@ -122,7 +124,7 @@ class LoginViewModel @Inject constructor(
                                 // Store session temporarily
                                 _state.update { it.copy(userSession = session) }
                                 // Now fetch user details before completing login
-                                fetchUserDetails(session)
+                                fetchUserDetails(session,currentState.email)
                             } ?: _state.update {
                                 it.copy(
                                     isLoading = false,
@@ -131,11 +133,8 @@ class LoginViewModel @Inject constructor(
                             }
                         }
 
-                        is ResultState.Failure -> _state.update {
-                            it.copy(
-                                isLoading = false,
-                                errorMessage = result.message.localizedMessage
-                            )
+                        is ResultState.Failure -> {
+                            handleLoginFailure(currentState.email, currentState.password, result.message)
                         }
 
                         is ResultState.Loading -> _state.update { it.copy(isLoading = true) }
@@ -145,9 +144,81 @@ class LoginViewModel @Inject constructor(
     }
 
 
-    private fun fetchUserDetails(session: UserSession) {
+    private fun handleLoginFailure(email: String, password: String, loginError: Throwable) {
         viewModelScope.launch {
-            loginRepository.fetchUserInfo().collect { result ->
+            // Check if email exists in users table
+            signUpRepository.checkEmailExists(email)
+                .collect { result ->
+                    when (result) {
+                        is ResultState.Success -> {
+                            if (result.data) {
+                                // Email exists in database but no auth account yet
+                                // This means admin added them but they haven't registered
+                                // Automatically create their account
+                                createAccountForPreregisteredUser(email, password)
+                            } else {
+                                // Email doesn't exist in the database at all
+                                _state.update {
+                                    it.copy(
+                                        isLoading = false,
+                                        errorMessage = "Email not found. Please contact an admin."
+                                    )
+                                }
+                            }
+                        }
+                        is ResultState.Failure -> {
+                            // Failed to check email existence
+                            _state.update {
+                                it.copy(
+                                    isLoading = false,
+                                    errorMessage = "Login failed: ${loginError.localizedMessage ?: "Unknown error"}"
+                                )
+                            }
+                        }
+                        is ResultState.Loading -> {
+                            // Keep loading state
+                        }
+                    }
+                }
+        }
+    }
+
+    private fun createAccountForPreregisteredUser(email: String, password: String) {
+        viewModelScope.launch {
+            signUpRepository.signup(email, password)
+                .collect { result ->
+                    when (result) {
+                        is ResultState.Success -> {
+                            result.data?.let { session ->
+                                fetchUserDetails(session,email)
+                            } ?: _state.update {
+                                it.copy(
+                                    isLoading = false,
+                                    errorMessage = "Failed to create account automatically"
+                                )
+                            }
+                        }
+                        is ResultState.Failure -> {
+                            _state.update {
+                                it.copy(
+                                    isLoading = false,
+                                    errorMessage = "Failed to create account: ${result.message.localizedMessage}"
+                                )
+                            }
+                        }
+                        is ResultState.Loading -> {
+                            // Keep loading state
+                        }
+                    }
+                }
+        }
+    }
+
+
+
+    private fun fetchUserDetails(session: UserSession, email: String) {
+        viewModelScope.launch {
+            loginRepository.fetchUserInfo(email).collect { result ->
                 _state.update {
                     when (result) {
                         is ResultState.Success -> {
@@ -159,10 +230,15 @@ class LoginViewModel @Inject constructor(
                                 userEntity = result.data
                             )
                         }
-                        is ResultState.Failure -> it.copy(
-                            isLoading = false,
-                            errorMessage = result.message.localizedMessage ?: "Failed to fetch user details"
-                        )
+                        is ResultState.Failure -> {
+                            Log.d("ISSUEA","${result.message.localizedMessage}")
+
+                            it.copy(
+                                isLoading = false,
+                                errorMessage = result.message.localizedMessage
+                                    ?: "Failed to fetch user details"
+                            )
+                        }
                         is ResultState.Loading -> it.copy(isLoading = true)
                     }
                 }

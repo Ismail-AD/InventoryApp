@@ -1,14 +1,20 @@
 package com.appdev.inventoryapp
 
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.appdev.inventoryapp.Utils.NotificationPreferenceManager
 import com.appdev.inventoryapp.Utils.SessionManagement
+import com.appdev.inventoryapp.Utils.StockCheckWorker
 import com.appdev.inventoryapp.navigation.NavGraph
 import com.appdev.inventoryapp.ui.theme.InventoryAppTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -21,6 +27,10 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
     @Inject
     lateinit var sessionManagement: SessionManagement
+
+    @Inject
+    lateinit var notificationPreferenceManager: NotificationPreferenceManager
+
     @Inject
     lateinit var supabaseClient: SupabaseClient
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -28,15 +38,42 @@ class MainActivity : ComponentActivity() {
         val userType = sessionManagement.getUserRole()
         val userId = sessionManagement.getUserId()
 
+
 //        enableEdgeToEdge()
+        checkNotificationPermission()
         lifecycleScope.launch {
             val isSessionValid = refreshSessionIfNeeded()
             setContent {
                 InventoryAppTheme {
                     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                        NavGraph(userType, userId,isSessionValid)
+                        NavGraph(userType, userId, isSessionValid)
                     }
                 }
+            }
+        }
+    }
+
+    private fun checkNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            when {
+                ContextCompat.checkSelfPermission(
+                    this,
+                    android.Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED -> {
+                    // Permission already granted, schedule worker
+                    scheduleStockCheck()
+                }
+            }
+        } else {
+
+            scheduleStockCheck()
+        }
+    }
+
+    private fun scheduleStockCheck() {
+        if (notificationPreferenceManager.isLowStockNotificationEnabled()) {
+            sessionManagement.getShopId()?.let { shopID ->
+                StockCheckWorker.schedulePeriodicWork(this, shopID)
             }
         }
     }

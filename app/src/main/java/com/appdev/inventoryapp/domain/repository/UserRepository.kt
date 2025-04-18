@@ -7,6 +7,7 @@ import com.appdev.inventoryapp.domain.model.UserEntity
 import kotlinx.coroutines.flow.Flow
 
 interface UserRepository {
+    fun logout(): Flow<ResultState<Boolean>>
     suspend fun getAllUsers(shopId: String, userId: String): Flow<ResultState<List<UserEntity>>>
     suspend fun createUser(
         userEntity: UserEntity,
@@ -22,4 +23,7 @@ interface UserRepository {
         permissions: List<Permission>
     ): Flow<ResultState<Boolean>>
     suspend fun checkEmailExists(email: String): Flow<ResultState<Boolean>>
+    suspend fun updateShopName(userId: String, shopName: String): Flow<ResultState<Boolean>>
+    suspend fun updateUserName(userId: String, userName: String): Flow<ResultState<Boolean>>
+    suspend fun checkShopNameExists(shopName: String): Flow<ResultState<Boolean>>
 }
