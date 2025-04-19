@@ -3,6 +3,7 @@ package com.appdev.inventoryapp.ui.Screens.InventoryManagemnt
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.appdev.inventoryapp.Utils.AppPreferencesManager
 import com.appdev.inventoryapp.Utils.ResultState
 import com.appdev.inventoryapp.Utils.SessionManagement
 import com.appdev.inventoryapp.domain.model.Category
@@ -21,7 +22,8 @@ import javax.inject.Inject
 @HiltViewModel
 class AddInventoryItemViewModel @Inject constructor(
     private val repository: InventoryRepository,
-    val sessionManagement: SessionManagement
+    val sessionManagement: SessionManagement,
+    val appPreferencesManager: AppPreferencesManager
 ) : ViewModel() {
 
 
@@ -30,6 +32,9 @@ class AddInventoryItemViewModel @Inject constructor(
 
     init {
         fetchCategories()
+        _state.update {
+            it.copy(dontShowConfirmationAgain = appPreferencesManager.shouldSkipInventoryConfirmation())
+        }
     }
 
     fun initializeWithProduct(product: InventoryItem) {
@@ -168,7 +173,7 @@ class AddInventoryItemViewModel @Inject constructor(
                 if (validationError != null) {
                     // Show error message if validation fails
                     _state.update { it.copy(errorMessage = validationError) }
-                } else if (_state.value.dontShowConfirmationAgain) {
+                } else if (appPreferencesManager.shouldSkipInventoryConfirmation()) {
                     submitItem(event.listOfImageByteArrays)
                 } else {
                     _state.update { it.copy(showConfirmationModal = true) }
@@ -219,8 +224,14 @@ class AddInventoryItemViewModel @Inject constructor(
                 }
             }
 
+            is AddInventoryItemEvent.SetDontShowConfirmationAgain -> {
+                _state.update { it.copy(dontShowConfirmationAgain = event.dontShow) }
+                appPreferencesManager.setSkipInventoryConfirmation(event.dontShow)
+            }
 
-            else -> {}
+            else -> {
+
+            }
         }
     }
 

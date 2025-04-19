@@ -1,6 +1,8 @@
 package com.appdev.inventoryapp.ui.Screens.Reports
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.res.Configuration
 import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -20,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -571,7 +574,6 @@ fun KpiCardsRow(state: ReportState) {
 
 }
 
-
 @Composable
 fun SalesTrendCard(state: ReportState) {
     Card(
@@ -586,6 +588,14 @@ fun SalesTrendCard(state: ReportState) {
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
+            Text(
+                text = "Sales Trend",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             if (state.salesTrend.isEmpty()) {
                 Text(
                     text = "No sales data available for the selected period",
@@ -603,55 +613,37 @@ fun SalesTrendCard(state: ReportState) {
                         .height(280.dp)
                         .padding(vertical = 8.dp)
                 ) {
-                    // Prepare the data for the Line chart
-                    val sortedEntries = state.salesTrend.entries.sortedBy { it.key }
-                    val values = sortedEntries.map { it.value }
-
-                    val salesLine = Line(
-                        label = "Sales Trend",
-                        values = values,
-                        color = SolidColor(MaterialTheme.colorScheme.primary),
-                        firstGradientFillColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        secondGradientFillColor = Color.Transparent,
-                        strokeAnimationSpec = tween(2000, easing = EaseInOutCubic),
-                        gradientAnimationDelay = 1000,
-                        drawStyle = DrawStyle.Stroke(width = 2.dp),
-                        dotProperties = DotProperties(
-                            color = SolidColor(MaterialTheme.colorScheme.primary),
-                            radius = 4.dp,
-                            enabled = true
-                        ),
-                        popupProperties = PopupProperties(
-                            textStyle = TextStyle(
-                                color = Color.Green,
-                                fontSize = 12.sp
-                            )
+                    // Use the prepared chart data from state
+                    if (state.salesTrendChartData.isNotEmpty()) {
+                        LineChart(
+                            labelProperties = LabelProperties(
+                                enabled = true,
+                                textStyle = TextStyle(
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontSize = 14.sp
+                                )
+                            ),
+                            indicatorProperties = HorizontalIndicatorProperties(
+                                enabled = true,
+                                textStyle = TextStyle(
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            ),
+                            labelHelperProperties = LabelHelperProperties(
+                                enabled = true,
+                                textStyle = TextStyle(
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    fontSize = 14.sp
+                                )
+                            ),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 7.dp, vertical = 8.dp),
+                            data = state.salesTrendChartData,
+                            animationMode = AnimationMode.Together(delayBuilder = { it * 500L }),
                         )
-                    )
-
-                    LineChart(
-                        labelProperties = LabelProperties(
-                            enabled = true,
-                            textStyle = TextStyle(color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
-                        ),
-                        indicatorProperties = HorizontalIndicatorProperties(
-                            enabled = true,
-                            textStyle = TextStyle(
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        ),
-                        labelHelperProperties = LabelHelperProperties(
-                            enabled = true,
-                            textStyle = TextStyle(color = MaterialTheme.colorScheme.onBackground, fontSize = 14.sp)
-                        ),
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 7.dp, vertical = 8.dp),
-                        data = listOf(salesLine),
-                        animationMode = AnimationMode.Together(delayBuilder = { it * 500L }),
-                    )
+                    }
                 }
-
             }
         }
     }
@@ -694,31 +686,25 @@ fun CategoryBreakdownCard(state: ReportState) {
                 // Add Ehsan Narmani Pie Chart
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(250.dp)
+                        .fillMaxWidth() .wrapContentHeight()
                         .padding(vertical = 8.dp)
                 ) {
                     // Generate category colors
-                    val categoryColors = listOf(
-                        Color(0xFF23af92), // Teal
-                        Color(0xFF3366CC), // Blue
-                        Color(0xFFDC3912), // Red
-                        Color(0xFFFF9900), // Orange
-                        Color(0xFF109618), // Green
-                        Color(0xFF990099), // Purple
-                        Color(0xFF0099C6), // Turquoise
-                        Color(0xFFDD4477), // Pink
-                        Color(0xFF66AA00)  // Lime
-                    )
+                    val categoryColorMap = remember(state.categoryBreakdown.keys) {
+                        // Generate a map of category to color
+                        val categories = state.categoryBreakdown.keys.toList()
+                        val colors = generateDistinctColorsImproved(categories.size)
+                        categories.zip(colors).toMap()
+                    }
 
                     // Format the data for the pie chart
-                    val pieData = state.categoryBreakdown.entries.mapIndexed { index, entry ->
-                        val colorIndex = index % categoryColors.size
+                    val pieData = state.categoryBreakdown.entries.map { entry ->
                         Pie(
                             label = entry.key,
                             data = entry.value,
-                            color = categoryColors[colorIndex],
-                            selectedColor = categoryColors[colorIndex].copy(alpha = 0.8f)
+                            color = categoryColorMap[entry.key] ?: Color.Gray,
+                            selectedColor = (categoryColorMap[entry.key]
+                                ?: Color.Gray).copy(alpha = 0.8f)
                         )
                     }
 
@@ -754,18 +740,13 @@ fun CategoryBreakdownCard(state: ReportState) {
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
+                        val format = NumberFormat.getCurrencyInstance(Locale.US)
 
-                        // Custom legend
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(80.dp),
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            items(data.size) { index ->
-                                val pie = data[index]
-                                val format = NumberFormat.getCurrencyInstance(Locale.US)
-
+                            data.forEach { pie ->
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically
@@ -1148,15 +1129,117 @@ fun DateRangePickerDialog(
     }
 }
 
-@Composable
-fun QuickDateButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    OutlinedButton(
-        onClick = onClick,
-        modifier = modifier,
-        colors = ButtonDefaults.outlinedButtonColors(
-            contentColor = MaterialTheme.colorScheme.onSurface
-        )
-    ) {
-        Text(text)
+/**
+ * Generates a list of visually distinct colors based on HSL color space with improved distribution.
+ * This function ensures good color separation regardless of the number of categories.
+ *
+ * @param count Number of distinct colors to generate
+ * @return List of distinct Color objects
+ */
+fun generateDistinctColorsImproved(count: Int): List<Color> {
+    // If we only need a few colors, use a predefined palette for optimal readability
+    val predefinedColors = listOf(
+        Color(0xFF1F77B4), // Blue
+        Color(0xFFFF7F0E), // Orange
+        Color(0xFF2CA02C), // Green
+        Color(0xFFD62728), // Red
+        Color(0xFF9467BD), // Purple
+        Color(0xFF8C564B), // Brown
+        Color(0xFFE377C2), // Pink
+        Color(0xFF7F7F7F), // Gray
+        Color(0xFFBCBD22), // Olive
+        Color(0xFF17BECF)  // Teal
+    )
+
+    if (count <= predefinedColors.size) {
+        return predefinedColors.take(count)
     }
+
+    val colors = mutableListOf<Color>()
+
+    // Use golden ratio conjugate to ensure maximum hue distance
+    val goldenRatioConjugate = 0.618033988749895
+    var h = kotlin.random.Random.nextDouble(
+        0.0,
+        1.0
+    ) // Random start value but deterministic per session
+
+    // We'll vary both saturation and lightness to get more distinct colors
+    // when we need a large number of them
+    val saturationRange = if (count > 20) {
+        listOf(0.65f, 0.8f)
+    } else {
+        listOf(0.7f)
+    }
+
+    val lightnessRange = if (count > 30) {
+        listOf(0.45f, 0.6f)
+    } else {
+        listOf(0.55f)
+    }
+
+    // We'll cycle through combinations of saturation and lightness
+    var saturationIndex = 0
+    var lightnessIndex = 0
+
+    repeat(count) {
+        h += goldenRatioConjugate
+        h %= 1.0
+
+        val s = saturationRange[saturationIndex]
+        val l = lightnessRange[lightnessIndex]
+
+        // Cycle through saturation and lightness values
+        saturationIndex = (saturationIndex + 1) % saturationRange.size
+        if (saturationIndex == 0) {
+            lightnessIndex = (lightnessIndex + 1) % lightnessRange.size
+        }
+
+        // Convert HSL to RGB
+        val color = hslToColor(h.toFloat(), s, l)
+        colors.add(color)
+    }
+
+    return colors
+}
+
+/**
+ * Converts HSL (Hue, Saturation, Lightness) values to RGB Color.
+ *
+ * @param h Hue [0..1]
+ * @param s Saturation [0..1]
+ * @param l Lightness [0..1]
+ * @return Color object
+ */
+fun hslToColor(h: Float, s: Float, l: Float): Color {
+    val q = if (l < 0.5f) l * (1 + s) else l + s - l * s
+    val p = 2 * l - q
+
+    val r = hueToRgb(p, q, h + 1 / 3f)
+    val g = hueToRgb(p, q, h)
+    val b = hueToRgb(p, q, h - 1 / 3f)
+
+    return Color(r, g, b, 1.0f)
+}
+
+/**
+ * Helper function for HSL to RGB conversion.
+ */
+fun hueToRgb(p: Float, q: Float, t: Float): Float {
+    var tAdjusted = t
+    if (tAdjusted < 0) tAdjusted += 1f
+    if (tAdjusted > 1) tAdjusted -= 1f
+
+    return when {
+        tAdjusted < 1 / 6f -> p + (q - p) * 6 * tAdjusted
+        tAdjusted < 1 / 2f -> q
+        tAdjusted < 2 / 3f -> p + (q - p) * (2 / 3f - tAdjusted) * 6
+        else -> p
+    }
+}
+
+fun isSystemInDarkTheme(context: Context): Boolean {
+    val currentNightMode =
+        context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+    return currentNightMode == Configuration.UI_MODE_NIGHT_YES
 }

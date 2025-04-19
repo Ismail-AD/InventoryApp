@@ -7,43 +7,48 @@ import com.appdev.inventoryapp.domain.model.SalesRecord
 import com.appdev.inventoryapp.Utils.DateRangeFilter
 import java.util.Date
 
+// Step 2: Update SalesPageState to include user permissions
 data class SalesPageState(
-    // Original SalesPage state properties
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
     val inventoryItems: List<InventoryItem> = emptyList(),
     val filteredItems: List<InventoryItem> = emptyList(),
     val searchQuery: String = "",
-    val isLoading: Boolean = false,
-    val errorMessage: String? = null,
-    val isSortMenuExpanded: Boolean = false,
-    val isCategoryMenuExpanded: Boolean = false,
     val currentSortOrder: SortOrder = SortOrder.NEWEST_FIRST,
     val selectedCategory: String? = null,
     val categories: List<String> = emptyList(),
-    val cartItems: List<SaleRecordItem> = emptyList(),
-    val isQrScannerActive: Boolean = false,
-    val showSuccessMessage: Boolean = false,
+    val isSortMenuExpanded: Boolean = false,
+    val isCategoryMenuExpanded: Boolean = false,
     val quantitySold: String = "",
     val discount: String = "",
     val isPercentageDiscount: Boolean = true,
-    val itemQuantityMap: Map<Long, Int> = emptyMap(),
-    val showConfirmationDialog: Boolean = false,
+    val cartItems: List<SaleRecordItem> = emptyList(),
     val successMessage: String? = null,
+    val showSuccessMessage: Boolean = false,
+    val isQrScannerActive: Boolean = false,
+    val showConfirmationDialog: Boolean = false,
+    val itemQuantityMap: Map<Long, Int> = emptyMap(),
 
-    // Added SalesHistory state properties
+    // Sales history related state
     val salesRecords: List<SalesRecord> = emptyList(),
     val filteredRecords: List<SalesRecord> = emptyList(),
-    val selectedStatus: String? = null,
-    val startDate: Date? = null,
-    val endDate: Date? = null,
-    val dateRangeFilter: DateRangeFilter = DateRangeFilter.ALL,
-    val isStatusMenuExpanded: Boolean = false,
-    val isDateRangeMenuExpanded: Boolean = false,
     val selectedSalesRecord: SalesRecord? = null,
     val showDetailModal: Boolean = false,
-
+    val selectedStatus: String? = null,
+    val isStatusMenuExpanded: Boolean = false,
+    val dateRangeFilter: DateRangeFilter = DateRangeFilter.ALL,
+    val isDateRangeMenuExpanded: Boolean = false,
+    val startDate: Date? = null,
+    val endDate: Date? = null,
+    val tempStartDate: Date? = null,
+    val tempEndDate: Date? = null,
     val showStartDatePicker: Boolean = false,
     val showEndDatePicker: Boolean = false,
-    val tempStartDate: Date? = null,  // For storing temporary selection before confirming
-    val tempEndDate: Date? = null     // For storing temporary selection before confirming
+
+    // Undo sale functionality
+    val userPermissions: List<String> = emptyList(),
+    val showUndoConfirmationDialog: Boolean = false,
+    val saleToUndo: SalesRecord? = null,
+    val isUndoLoading: Boolean = false,
 )
 

@@ -9,5 +9,6 @@ enum class AuditActionType {
     USER_DEACTIVATED,
     PERMISSIONS_CHANGED,
     ROLE_CHANGED,
+    SALE_REVERSED,
     OTHER
 }

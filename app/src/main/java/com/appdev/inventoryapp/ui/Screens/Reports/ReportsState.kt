@@ -2,6 +2,7 @@ package com.appdev.inventoryapp.ui.Screens.Reports
 
 import com.appdev.inventoryapp.domain.model.InventoryItem
 import com.appdev.inventoryapp.domain.model.SalesRecord
+import ir.ehsannarmani.compose_charts.models.Line
 import java.time.LocalDate
 
 data class ReportState(
@@ -39,5 +40,10 @@ data class ReportState(
     val salesTrend: Map<String, Double> = emptyMap(),
     val topProducts: List<Pair<String, Int>> = emptyList(),
     val categories: List<String> = emptyList(),
-    val salespeople: List<String> = emptyList()
+    val salespeople: List<String> = emptyList(),
+
+    val salesTrendLine: Line? = null,
+    val salesTrendChartData: List<Line> = emptyList(),
+    val salesTrendSortedEntries: List<Map.Entry<String, Double>> = emptyList(),
+    val salesTrendValues: List<Double> = emptyList()
 )

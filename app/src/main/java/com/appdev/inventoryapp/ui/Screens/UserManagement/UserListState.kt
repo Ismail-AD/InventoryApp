@@ -42,5 +42,7 @@ data class UsersListState(
 
     val showLogsDialog: Boolean = false,
     val logsData: List<AuditLogEntry> = emptyList(),
-    val isLogsLoading: Boolean = false
-)
+    val isLogsLoading: Boolean = false,
+    val userPermissions: List<String> = emptyList(),
+
+    )

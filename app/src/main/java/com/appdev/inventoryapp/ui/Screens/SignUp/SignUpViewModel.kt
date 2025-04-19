@@ -3,6 +3,7 @@ package com.appdev.inventoryapp.ui.Screens.SignUp
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.appdev.inventoryapp.Utils.Permission
 import com.appdev.inventoryapp.Utils.ResultState
 import com.appdev.inventoryapp.Utils.SessionManagement
 import com.appdev.inventoryapp.domain.model.UserEntity
@@ -144,6 +145,7 @@ class SignupViewModel @Inject constructor(
                     username = currentState.userName,
                     email = currentState.email,
                     role = currentState.userRole,
+                    permissions = Permission.entries.map { it.name },
                     isActive = true
                 )
             ).collect { result ->

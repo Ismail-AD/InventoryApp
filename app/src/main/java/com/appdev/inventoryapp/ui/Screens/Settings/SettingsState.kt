@@ -3,6 +3,7 @@ package com.appdev.inventoryapp.ui.Screens.Settings
 
 data class SettingsState(
     val shopName: String = "",
+    val userRole: String = "",
     val userName: String = "",
     val email: String = "",
     val userId: String = "",

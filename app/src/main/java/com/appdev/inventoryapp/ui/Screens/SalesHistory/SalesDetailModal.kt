@@ -1,5 +1,7 @@
 package com.appdev.inventoryapp.ui.Screens.SalesHistory
 
+import android.util.Log
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.appdev.inventoryapp.Utils.Permission
 import com.appdev.inventoryapp.domain.model.InventoryItem
 import com.appdev.inventoryapp.domain.model.SaleRecordItem
 import com.appdev.inventoryapp.domain.model.SalesRecord
@@ -23,12 +26,17 @@ import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
 
+// Step 8: Update SalesDetailModal to include undo button
 @Composable
 fun SalesDetailModal(
     inventoryItems: List<InventoryItem>,
+    isUndoLoading: Boolean = false,
     salesRecord: SalesRecord,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    userPermissions: List<String>,
+    onUndoSale: (SalesRecord) -> Unit
 ) {
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -51,42 +59,98 @@ fun SalesDetailModal(
                     .fillMaxSize()
                     .padding(16.dp)
             ) {
-                // Header
-                SalesDetailHeader(
-                    salesRecord = salesRecord,
-                    onClose = onDismiss
-                )
-
-                Divider(
-                    modifier = Modifier.padding(vertical = 8.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-
-                // Content
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Sale information section
-                    item {
-                        SaleInformationSection(salesRecord)
+                when {
+                    isUndoLoading -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
 
-                    // Products list header
-                    item {
-                        ProductsListHeader()
-                    }
+                    else -> {
+                        // Header
+                        SalesDetailHeader(
+                            salesRecord = salesRecord,
+                            onClose = onDismiss
+                        )
 
-                    // Products list
-                    items(salesRecord.salesRecordItem) { item ->
-                        ProductItem(item,inventoryItems.find { inventoryitems-> inventoryitems.id==item.productId })
-                    }
+                        Divider(
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant
+                        )
 
-                    
+                        // Content
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Sale information section
+                            item {
+                                SaleInformationSection(salesRecord)
+                            }
+
+                            // Undo button - only shown for users with UNDO_SALES permission
+                            // and if sale status is "Completed"
+                            item {
+                                val canUndoSale = Permission.UNDO_SALES.name in userPermissions
+
+                                if (canUndoSale && salesRecord.status == "Completed") {
+                                    UndoSaleButton(
+                                        onClick = { onUndoSale(salesRecord) }
+                                    )
+                                }
+                            }
+
+                            // Products list header
+                            item {
+                                ProductsListHeader()
+                            }
+
+                            // Products list
+                            items(salesRecord.salesRecordItem) { item ->
+                                ProductItem(item, inventoryItems.find { it.id == item.productId })
+                            }
+                        }
+                    }
                 }
             }
+        }
+    }
+
+}
+
+@Composable
+fun UndoSaleButton(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Button(
+            onClick = onClick,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xffB3261E)
+            ),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+        ) {
+            Icon(
+                Icons.Default.Close,
+                contentDescription = "Undo",
+                modifier = Modifier.size(20.dp),
+                tint = Color.White
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Undo Sale", color = Color.White)
         }
     }
 }
@@ -97,7 +161,7 @@ fun ProductItem(item: SaleRecordItem, product: InventoryItem?) {
     val currencyFormat = NumberFormat.getCurrencyInstance()
     val unitPrice = item.selling_price
     val subtotal = (item.selling_price - item.discountAmount) * item.quantity
-    val totalTax = if(product != null) {
+    val totalTax = if (product != null) {
         product.taxes * item.quantity
     } else {
         0.0f

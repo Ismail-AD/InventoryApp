@@ -26,7 +26,7 @@ class InventoryViewModel @Inject constructor(
     val state: StateFlow<InventoryState> = _state.asStateFlow()
 
     init {
-        loadInventory(sessionManagement.getShopId())
+//        loadInventory(sessionManagement.getShopId())
         fetchCategories()
     }
     fun handleEvent(event: InventoryEvent) {

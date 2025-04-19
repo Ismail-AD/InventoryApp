@@ -35,10 +35,10 @@ class UsersListViewModel @Inject constructor(
     private val _state = MutableStateFlow(UsersListState())
     val state: StateFlow<UsersListState> = _state.asStateFlow()
 
-    private var currentUserPermissions: List<Permission> = emptyList()
 
     init {
         viewModelScope.launch {
+            loadUserPermissions()
             handleEvent(UsersListEvent.RefreshUsers)
         }
     }
@@ -46,7 +46,44 @@ class UsersListViewModel @Inject constructor(
     fun getUserRole(): String {
         return sessionManagement.getUserRole() ?: "View Only"
     }
+    fun canManageUsers(): Boolean {
+        return state.value.userPermissions.contains(Permission.MANAGE_USERS.name)
+    }
+    private fun loadUserPermissions() {
+        viewModelScope.launch {
+            sessionManagement.getUserId()?.let { myId ->
+                userRepository.getUserPermissions(myId).collect { result ->
+                    when (result) {
+                        is ResultState.Loading -> {
+                            _state.update { it.copy(isLoading = true) }
+                        }
 
+                        is ResultState.Success -> {
+                            Log.d("CADS", "${result.data}")
+                            _state.update {
+                                it.copy(
+                                    userPermissions = result.data.permissions ?: emptyList(),
+                                    error = null
+                                )
+                            }
+                        }
+
+                        is ResultState.Failure -> {
+                            _state.update {
+                                it.copy(
+                                    isLoading = false,
+                                    error = "Failed to get Permissions: ${result.message.localizedMessage}"
+                                )
+                            }
+                        }
+
+                        else -> {}
+                    }
+
+                }
+            }
+        }
+    }
 
     private fun createAuditLog(
         actionType: AuditActionType,
@@ -99,7 +136,7 @@ class UsersListViewModel @Inject constructor(
     }
 
     fun handleEvent(event: UsersListEvent) {
-//        if (!canManageUsers() && event !is UsersListEvent.RefreshUsers) {
+//        if (!canManageUsers()) {
 //            return
 //        }
 
@@ -676,28 +713,28 @@ class UsersListViewModel @Inject constructor(
             originalString
         }
 
-        // Find the timestamp pattern to correctly position "by performedBy"
-        val timePattern = "at \\w+ \\d+, \\d{4} at \\d+:\\d+ [AP]M"
-        val regex = timePattern.toRegex()
-        val matchResult = regex.find(firstPartWithUsername)
+        // Find AM/PM pattern to correctly position "performed by name"
+        val amPmRegex = "(\\d+:\\d+ [AP]M)".toRegex()
+        val matchResult = amPmRegex.find(firstPartWithUsername)
 
         return if (matchResult != null) {
-            val timeEndIndex = matchResult.range.last + 1
+            val amPmEndIndex = matchResult.range.last + 1
 
-            // Check if there's additional content (like "Changes:") after the timestamp
-            val periodIndex = firstPartWithUsername.indexOf(".", timeEndIndex)
+            // Check if there's a period after AM/PM
+            val periodAfterTime = firstPartWithUsername.indexOf(".", amPmEndIndex)
 
-            if (periodIndex != -1) {
-                // Insert "by performedBy" before the period that starts additional content
-                firstPartWithUsername.substring(0, periodIndex) +
-                        " by $performedByName" +
-                        firstPartWithUsername.substring(periodIndex)
+            if (periodAfterTime != -1) {
+                // Insert "performed by name" after AM/PM but before the period
+                firstPartWithUsername.substring(0, amPmEndIndex) +
+                        " performed by $performedByName" +
+                        firstPartWithUsername.substring(amPmEndIndex)
             } else {
-                // No additional content, append "by performedBy" at the end
-                "${firstPartWithUsername} by $performedByName"
+                // No period found after the time, just append at the end of the string
+                "$firstPartWithUsername performed by $performedByName"
             }
         } else {
-            // Fallback if timestamp pattern not found: try to find just "at" near the end
+            // Fallback if AM/PM pattern not found
+            // Try to find a timestamp pattern or just append at the end
             val atIndex = firstPartWithUsername.lastIndexOf("at ")
 
             if (atIndex != -1) {
@@ -710,15 +747,15 @@ class UsersListViewModel @Inject constructor(
 
                 if (breakpointIndex != null) {
                     firstPartWithUsername.substring(0, breakpointIndex) +
-                            " by $performedByName" +
+                            " performed by $performedByName" +
                             firstPartWithUsername.substring(breakpointIndex)
                 } else {
                     // No obvious breakpoint, just append at the end
-                    "$firstPartWithUsername by $performedByName"
+                    "$firstPartWithUsername performed by $performedByName"
                 }
             } else {
                 // No "at" found, just append at the end
-                "$firstPartWithUsername by $performedByName"
+                "$firstPartWithUsername performed by $performedByName"
             }
         }
     }

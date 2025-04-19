@@ -14,7 +14,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.appdev.inventoryapp.Utils.NotificationPreferenceManager
 import com.appdev.inventoryapp.Utils.SessionManagement
-import com.appdev.inventoryapp.Utils.StockCheckWorker
 import com.appdev.inventoryapp.navigation.NavGraph
 import com.appdev.inventoryapp.ui.theme.InventoryAppTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -28,8 +27,6 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var sessionManagement: SessionManagement
 
-    @Inject
-    lateinit var notificationPreferenceManager: NotificationPreferenceManager
 
     @Inject
     lateinit var supabaseClient: SupabaseClient
@@ -40,7 +37,6 @@ class MainActivity : ComponentActivity() {
 
 
 //        enableEdgeToEdge()
-        checkNotificationPermission()
         lifecycleScope.launch {
             val isSessionValid = refreshSessionIfNeeded()
             setContent {
@@ -53,30 +49,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun checkNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            when {
-                ContextCompat.checkSelfPermission(
-                    this,
-                    android.Manifest.permission.POST_NOTIFICATIONS
-                ) == PackageManager.PERMISSION_GRANTED -> {
-                    // Permission already granted, schedule worker
-                    scheduleStockCheck()
-                }
-            }
-        } else {
 
-            scheduleStockCheck()
-        }
-    }
 
-    private fun scheduleStockCheck() {
-        if (notificationPreferenceManager.isLowStockNotificationEnabled()) {
-            sessionManagement.getShopId()?.let { shopID ->
-                StockCheckWorker.schedulePeriodicWork(this, shopID)
-            }
-        }
-    }
 
     private suspend fun refreshSessionIfNeeded(): Boolean {
         if (!sessionManagement.isSessionValid() && sessionManagement.getRefreshToken() != null) {

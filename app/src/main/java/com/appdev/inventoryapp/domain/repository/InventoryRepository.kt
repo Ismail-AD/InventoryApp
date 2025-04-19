@@ -8,6 +8,7 @@ import com.appdev.inventoryapp.domain.model.SalesRecord
 import kotlinx.coroutines.flow.Flow
 
 interface InventoryRepository {
+    fun undoSalesRecord(salesRecord: SalesRecord): Flow<ResultState<String>>
     fun getSalesRecords(shopId: String): Flow<ResultState<List<SalesRecord>>>
     fun updateInventoryItems(
         salesRecord: SalesRecord,

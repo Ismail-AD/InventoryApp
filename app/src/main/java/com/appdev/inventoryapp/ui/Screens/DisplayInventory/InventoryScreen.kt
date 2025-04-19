@@ -42,11 +42,12 @@ fun InventoryScreen(
     navigateToItemDetail: (InventoryItem) -> Unit,
     navigateToUpdateItem: (InventoryItem) -> Unit,
 ) {
-//    LaunchedEffect(Unit) {
-//        viewModel.handleEvent(InventoryEvent.LoadInventory)
-//    }
 
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        viewModel.handleEvent(InventoryEvent.LoadInventory)
+    }
 
     InventoryScreenContent(
         state = state,

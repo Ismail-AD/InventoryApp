@@ -48,9 +48,20 @@ fun SalesHistoryScreen(
     )
     if (state.showDetailModal && state.selectedSalesRecord != null) {
         SalesDetailModal(
-            state.inventoryItems,
+            inventoryItems = state.inventoryItems,
+            isUndoLoading = state.isUndoLoading,
             salesRecord = state.selectedSalesRecord!!,
-            onDismiss = { viewModel.handleEvent(SalesPageEvent.HideSaleDetail) }
+            onDismiss = { viewModel.handleEvent(SalesPageEvent.HideSaleDetail) },
+            userPermissions = state.userPermissions,
+            onUndoSale = { viewModel.handleEvent(SalesPageEvent.ShowUndoConfirmation(it)) }
+        )
+    }
+
+    // Show undo confirmation dialog if needed
+    if (state.showUndoConfirmationDialog) {
+        UndoConfirmationDialog(
+            onConfirm = { viewModel.handleEvent(SalesPageEvent.ConfirmUndoSale) },
+            onDismiss = { viewModel.handleEvent(SalesPageEvent.DismissUndoConfirmation) }
         )
     }
 }
@@ -833,4 +844,36 @@ fun NoMatchesFoundMessage(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
         )
     }
+}
+
+// Step 7: Create UndoConfirmationDialog composable
+@Composable
+fun UndoConfirmationDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Undo Sale") },
+        text = {
+            Text(
+                "Are you sure you want to undo this sale? This will return all sold items back to inventory and mark the sale as Reversed."
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("Undo Sale")
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }

@@ -4,13 +4,12 @@ import com.appdev.inventoryapp.Utils.DateRangeFilter
 import com.appdev.inventoryapp.Utils.SortOrder
 import com.appdev.inventoryapp.domain.model.InventoryItem
 import com.appdev.inventoryapp.domain.model.SalesRecord
+import java.security.Permissions
 import java.util.Date
 
 sealed class SalesPageEvent {
-    data object RefreshInventory : SalesPageEvent()
     data class SearchQueryChanged(val query: String) : SalesPageEvent()
     data object DismissError : SalesPageEvent()
-    data object LoadInventory : SalesPageEvent()
     data class UpdateSortOrder(val sortOrder: SortOrder) : SalesPageEvent()
     data class FilterByCategory(val category: String?) : SalesPageEvent()
     data object FetchCategories : SalesPageEvent()
@@ -48,4 +47,8 @@ sealed class SalesPageEvent {
     data class TempEndDateSelected(val date: Date) : SalesPageEvent()
     data object ApplyCustomDateRange : SalesPageEvent()
     data object CancelCustomDateRange : SalesPageEvent()
+
+    data class ShowUndoConfirmation(val salesRecord: SalesRecord) : SalesPageEvent()
+    object DismissUndoConfirmation : SalesPageEvent()
+    object ConfirmUndoSale : SalesPageEvent()
 }

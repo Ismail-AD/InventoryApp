@@ -4,28 +4,36 @@ package com.appdev.inventoryapp.ui.Screens.SalesPage
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.appdev.inventoryapp.Utils.AuditActionType
 import com.appdev.inventoryapp.Utils.DateRangeFilter
 import com.appdev.inventoryapp.Utils.ResultState
 import com.appdev.inventoryapp.Utils.SessionManagement
 import com.appdev.inventoryapp.Utils.SortOrder
+import com.appdev.inventoryapp.domain.model.AuditLogEntry
 import com.appdev.inventoryapp.domain.model.InventoryItem
 import com.appdev.inventoryapp.domain.model.SaleRecordItem
 import com.appdev.inventoryapp.domain.model.SalesRecord
+import com.appdev.inventoryapp.domain.repository.AuditLogRepository
 import com.appdev.inventoryapp.domain.repository.InventoryRepository
+import com.appdev.inventoryapp.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
+import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
 
 @HiltViewModel
 class SalesPageViewModel @Inject constructor(
     private val repository: InventoryRepository,
+    private val userRepository: UserRepository,
+    private val auditLogRepository: AuditLogRepository,
     val sessionManagement: SessionManagement
 ) : ViewModel() {
     private val _state = MutableStateFlow(SalesPageState(isLoading = true))
@@ -35,10 +43,127 @@ class SalesPageViewModel @Inject constructor(
         loadInventory(sessionManagement.getShopId())
         loadSalesHistory(sessionManagement.getShopId())
         fetchCategories()
+        loadUserPermissions()
+    }
+
+    private fun createSalesAuditLog(
+        actionType: AuditActionType,
+        salesRecord: SalesRecord,
+        changes: List<String> = emptyList()
+    ) {
+        viewModelScope.launch {
+            val formattedTime = formatTimestamp(System.currentTimeMillis())
+
+            // Create a description for the sales action
+            val description = buildString {
+                append("${actionType.name} - Sales Record")
+                append(" #${salesRecord.id}")  // Just using first 8 chars of UUID for readability
+                append(" at $formattedTime")
+
+                if (changes.isNotEmpty()) {
+                    append(". Changes: ${changes.joinToString("; ")}")
+                }
+            }
+
+            val auditEntry = AuditLogEntry(
+                actionType = actionType.name,
+                shopId = sessionManagement.getShopId() ?: "",
+                performedByUserId = salesRecord.creator_id,
+                performedByUsername = salesRecord.creator_name,
+                targetUserId = salesRecord.creator_id,
+                targetUsername = salesRecord.creator_name,
+                description = description
+            )
+
+            auditLogRepository.createAuditLog(auditEntry).collect { result ->
+                when (result) {
+                    is ResultState.Failure -> {
+                        Log.e(
+                            "AUDIT_LOG",
+                            "Failed to create sales audit log: ${result.message.localizedMessage}"
+                        )
+                    }
+
+                    else -> {}
+                }
+            }
+        }
+    }
+    private fun formatTimestamp(timestamp: Long): String {
+        val dateFormat = SimpleDateFormat("MMM d, yyyy 'at' h:mm a", Locale.getDefault())
+        return dateFormat.format(Date(timestamp))
+    }
+
+    private fun loadUserPermissions() {
+        viewModelScope.launch {
+            sessionManagement.getUserId()?.let { myId ->
+                userRepository.getUserPermissions(myId).collect { result ->
+                    when (result) {
+                        is ResultState.Loading -> {
+                            _state.update { it.copy(isLoading = true) }
+                        }
+
+                        is ResultState.Success -> {
+                            Log.d("CADS", "${result.data}")
+                            _state.update {
+                                it.copy(
+                                    userPermissions = result.data.permissions ?: emptyList(),
+                                    isLoading = false,
+                                    errorMessage = null
+                                )
+                            }
+                        }
+
+                        is ResultState.Failure -> {
+                            _state.update {
+                                it.copy(
+                                    isLoading = false,
+                                    errorMessage = "Failed to get Permissions: ${result.message.localizedMessage}"
+                                )
+                            }
+                        }
+
+                        else -> {}
+                    }
+
+                }
+            }
+        }
     }
 
     fun handleEvent(event: SalesPageEvent) {
         when (event) {
+            is SalesPageEvent.ShowUndoConfirmation -> {
+                _state.update {
+                    it.copy(
+                        showUndoConfirmationDialog = true,
+                        saleToUndo = event.salesRecord
+                    )
+                }
+            }
+
+            is SalesPageEvent.DismissUndoConfirmation -> {
+                _state.update {
+                    it.copy(
+                        showUndoConfirmationDialog = false,
+                        saleToUndo = null
+                    )
+                }
+            }
+
+            is SalesPageEvent.ConfirmUndoSale -> {
+                val saleToUndo = _state.value.saleToUndo
+                if (saleToUndo != null) {
+                    _state.update {
+                        it.copy(
+                            showUndoConfirmationDialog = false
+                        )
+                    }
+                    undoSale(saleToUndo)
+                }
+            }
+
+
             is SalesPageEvent.ShowStartDatePicker -> {
                 _state.update { it.copy(showStartDatePicker = true) }
             }
@@ -83,11 +208,9 @@ class SalesPageViewModel @Inject constructor(
                     applySalesHistoryFilters()
                 }
             }
-            // Original SalesPage events
-            is SalesPageEvent.RefreshInventory -> loadInventory(sessionManagement.getShopId())
+
             is SalesPageEvent.SearchQueryChanged -> updateSearchQuery(event.query)
             is SalesPageEvent.DismissError -> dismissError()
-            is SalesPageEvent.LoadInventory -> loadInventory(sessionManagement.getShopId())
             is SalesPageEvent.UpdateSortOrder -> {
                 updateSortOrder(event.sortOrder)
                 _state.update { it.copy(isSortMenuExpanded = false) }
@@ -207,6 +330,55 @@ class SalesPageViewModel @Inject constructor(
 
             is SalesPageEvent.ToggleStatusMenu -> _state.update { it.copy(isStatusMenuExpanded = event.isExpanded) }
             is SalesPageEvent.ToggleDateRangeMenu -> _state.update { it.copy(isDateRangeMenuExpanded = event.isExpanded) }
+        }
+    }
+
+    private fun undoSale(salesRecord: SalesRecord) {
+        viewModelScope.launch {
+
+            repository.undoSalesRecord(salesRecord).collect { result ->
+                when (result) {
+                    is ResultState.Loading -> {
+                        _state.update { it.copy(isUndoLoading = true) }
+                    }
+
+                    is ResultState.Success -> {
+                        val itemDetails = salesRecord.salesRecordItem.joinToString(", ") {
+                            "${it.quantity}x ${it.productName}"
+                        }
+                        val changes = listOf("Reversed sale containing: $itemDetails")
+
+                        createSalesAuditLog(
+                            AuditActionType.SALE_REVERSED,  // You'll need to add this to AuditActionType enum
+                            salesRecord,
+                            changes
+                        )
+
+
+                        _state.update {
+                            it.copy(
+                                isUndoLoading = false,
+                                successMessage = "Sale successfully undone",
+                                showSuccessMessage = true,
+                                showDetailModal = false,       // Close the detail modal
+                                selectedSalesRecord = null     // Clear selected record
+                            )
+                        }
+                        loadSalesHistory(sessionManagement.getShopId())
+                    }
+
+                    is ResultState.Failure -> {
+                        _state.update {
+                            it.copy(
+                                isUndoLoading = false,
+                                errorMessage = "Failed to undo sale: ${result.message.localizedMessage}"
+                            )
+                        }
+                    }
+
+                    else -> {}
+                }
+            }
         }
     }
 

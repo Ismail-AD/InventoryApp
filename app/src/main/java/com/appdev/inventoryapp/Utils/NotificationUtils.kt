@@ -1,6 +1,5 @@
 package com.appdev.inventoryapp.Utils
 
-
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -8,93 +7,98 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import com.appdev.inventoryapp.MainActivity
 import com.appdev.inventoryapp.R
 import com.appdev.inventoryapp.domain.model.InventoryItem
 
 object NotificationUtils {
-    const val CHANNEL_ID = "inventory_alerts"
-    const val NOTIFICATION_GROUP = "inventory_group"
-    private const val STOCK_ALERT_REQUEST_CODE = 1001
+    const val LOW_STOCK_THRESHOLD = 5
+    private const val CHANNEL_ID = "low_stock_channel"
+    private const val CHANNEL_NAME = "Low Stock Alerts"
+    private const val CHANNEL_DESCRIPTION = "Notifications for low stock inventory items"
+    private const val NOTIFICATION_ID_BASE = 1000
+    private const val SUMMARY_NOTIFICATION_ID = 9999
 
-    // Stock threshold - can be moved to settings later
-    const val LOW_STOCK_THRESHOLD = 10
+    /**
+     * Create notification channel for Android O and above
+     */
+     fun createNotificationChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val importance = NotificationManager.IMPORTANCE_DEFAULT
+            val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, importance).apply {
+                description = CHANNEL_DESCRIPTION
+            }
 
-    fun createNotificationChannel(context: Context) {
-        val name = "Inventory Alerts"
-        val descriptionText = "Notifications for low inventory stock"
-        val importance = NotificationManager.IMPORTANCE_HIGH
-        val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
-            description = descriptionText
-            enableVibration(true)
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
         }
+    }
+
+    /**
+     * Create an intent to open the inventory screen
+     */
+    private fun createInventoryIntent(context: Context): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            // Add any extras to navigate to the inventory screen
+            putExtra("OPEN_INVENTORY", true)
+        }
+
+        val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+
+        return PendingIntent.getActivity(
+            context,
+            0,
+            intent,
+            pendingIntentFlags
+        )
+    }
+
+    /**
+     * Show notification for a single low stock item
+     */
+    fun showLowStockNotification(context: Context, item: InventoryItem) {
+        createNotificationChannel(context)
+
+        val pendingIntent = createInventoryIntent(context)
+
+        val notificationId = NOTIFICATION_ID_BASE + item.id.hashCode()
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.available)
+            .setContentTitle("Low Stock Alert")
+            .setContentText("${item.name} is running low (${item.quantity} remaining)")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true) // Notification disappears when tapped
+            .setGroup("low_stock_group")
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.createNotificationChannel(channel)
+        notificationManager.notify(notificationId, builder.build())
     }
 
-    fun showLowStockNotification(context: Context, item: InventoryItem, notificationId: Int = item.id.toInt()) {
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            putExtra("navigate_to_inventory", true)
-            putExtra("item_id", item.id)
-        }
-
-        val pendingIntent = PendingIntent.getActivity(
-            context, STOCK_ALERT_REQUEST_CODE, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.available) // Make sure you have this icon
-            .setContentTitle("Low Stock Alert")
-            .setContentText("${item.name} is running low (${item.quantity} left)")
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .setGroup(NOTIFICATION_GROUP)
-            .build()
-
-        with(NotificationManagerCompat.from(context)) {
-            try {
-                notify(notificationId, notification)
-            } catch (e: SecurityException) {
-                // Handle notification permission error
-            }
-        }
-    }
-
+    /**
+     * Show a summary notification when multiple items are low on stock
+     */
     fun showSummaryNotification(context: Context, itemCount: Int) {
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            putExtra("navigate_to_inventory", true)
-        }
+        createNotificationChannel(context)
 
-        val pendingIntent = PendingIntent.getActivity(
-            context, 0, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val pendingIntent = createInventoryIntent(context)
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.available)
-            .setContentTitle("Multiple Low Stock Alerts")
-            .setContentText("$itemCount items are low in stock")
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setContentTitle("Low Stock Alert")
+            .setContentText("$itemCount items are running low on stock")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
-            .setGroup(NOTIFICATION_GROUP)
+            .setGroup("low_stock_group")
             .setGroupSummary(true)
-            .build()
 
-        with(NotificationManagerCompat.from(context)) {
-            try {
-                notify(0, notification)
-            } catch (e: SecurityException) {
-                // Handle notification permission error
-            }
-        }
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(SUMMARY_NOTIFICATION_ID, builder.build())
     }
 }

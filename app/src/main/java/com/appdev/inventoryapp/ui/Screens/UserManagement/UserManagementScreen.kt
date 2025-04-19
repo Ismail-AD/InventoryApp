@@ -83,10 +83,9 @@ fun UsersManagementScreenContent(
                     color = MaterialTheme.colorScheme.primary
                 )
             }
-//            else if (!state.canManageUsers) {
-//                AccessDeniedMessage()
-//            }
-
+            else if (!state.userPermissions.contains(Permission.MANAGE_USERS.name)) {
+                AccessDeniedMessage()
+            }
             else if (state.users.isEmpty()) {
                 EmptyUsersMessage(onAddUser = { onEvent(UsersListEvent.ShowAddUserDialog) })
             } else {
@@ -1228,16 +1227,18 @@ fun LogCard(log: AuditLogEntry) {
             Spacer(modifier = Modifier.height(8.dp))
 
             // Target user info
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "Target: ",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = log.targetUsername,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+            if(log.actionType!=AuditActionType.SALE_REVERSED.name){
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Target: ",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = log.targetUsername,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
 
             // Performed by info

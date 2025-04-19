@@ -29,6 +29,62 @@ class InventoryRepositoryImpl @Inject constructor(
     private val itemImageBucketId = "itemimages"
     private val itemImageFolderPath = "public/17dr9sb_2"
 
+    // Step 6: Implement undoSalesRecord in InventoryRepositoryImpl
+    override fun undoSalesRecord(salesRecord: SalesRecord): Flow<ResultState<String>> = flow {
+        try {
+            emit(ResultState.Loading)
+
+            // 1. Update the status of the sale to "Undone"
+            supabase.from("sales").update(
+                {
+                    set("status", "Reversed")
+                    set("lastUpdated", System.currentTimeMillis().toString())
+                }
+            ) {
+                filter {
+                    eq("id", salesRecord.id)
+                }
+            }
+
+            // 2. Restore inventory items for each product in the sale
+            for (saleItem in salesRecord.salesRecordItem) {
+                // Get current inventory item
+                val inventoryItems = supabase
+                    .from("inventory")
+                    .select {
+                        filter {
+                            eq("id", saleItem.productId)
+                        }
+                    }
+                    .decodeList<InventoryItem>()
+
+                if (inventoryItems.isNotEmpty()) {
+                    val currentItem = inventoryItems.first()
+
+                    // Calculate new quantity (add back the sold quantity)
+                    val newQuantity = currentItem.quantity + saleItem.quantity
+
+                    // Update inventory item
+                    supabase.from("inventory").update(
+                        {
+                            set("quantity", newQuantity)
+                            set("lastUpdated", System.currentTimeMillis().toString())
+                        }
+                    ) {
+                        filter {
+                            eq("id", saleItem.productId)
+                        }
+                    }
+                }
+            }
+
+            emit(ResultState.Success("Sale successfully undone"))
+        } catch (e: Exception) {
+            Log.e("UNDO_SALE", "Error undoing sale: ${e.localizedMessage}")
+            emit(ResultState.Failure(e))
+        }
+    }
+
 
     override fun getSalesRecords(shopId: String): Flow<ResultState<List<SalesRecord>>> = flow {
         try {

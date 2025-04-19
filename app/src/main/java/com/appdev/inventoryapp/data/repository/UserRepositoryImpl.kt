@@ -5,11 +5,13 @@ import com.appdev.inventoryapp.Utils.Permission
 import com.appdev.inventoryapp.Utils.ResultState
 import com.appdev.inventoryapp.Utils.UserRole
 import com.appdev.inventoryapp.domain.model.UserEntity
+import com.appdev.inventoryapp.domain.model.UserPermissions
 import com.appdev.inventoryapp.domain.repository.UserRepository
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.SignOutScope
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
@@ -265,5 +267,21 @@ class UserRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun getUserPermissions(userId: String): Flow<ResultState<UserEntity>> = flow {
+        emit(ResultState.Loading)
+        try {
+            val response = supabase.from(USERS_TABLE)
+                .select(Columns.list("permissions")) {
+                    filter {
+                        eq("id", userId)
+                    }
+                }
+                .decodeSingle<UserEntity>()
+            emit(ResultState.Success(response))
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get user permissions: ${e.message}", e)
+            emit(ResultState.Failure(e))
+        }
+    }
 
 }

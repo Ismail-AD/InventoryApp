@@ -1,5 +1,13 @@
 package com.appdev.inventoryapp.ui.Screens.Reports
 
+import android.util.Log
+import androidx.compose.animation.core.EaseInOutCubic
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.appdev.inventoryapp.Utils.ResultState
@@ -9,6 +17,10 @@ import com.appdev.inventoryapp.domain.model.SalesRecord
 import com.appdev.inventoryapp.domain.repository.InventoryRepository
 import com.appdev.inventoryapp.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import ir.ehsannarmani.compose_charts.models.DotProperties
+import ir.ehsannarmani.compose_charts.models.DrawStyle
+import ir.ehsannarmani.compose_charts.models.Line
+import ir.ehsannarmani.compose_charts.models.PopupProperties
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -385,7 +397,36 @@ class ReportViewModel @Inject constructor(
             .sortedByDescending { it.second }
             .take(5) // Top 5 products
 
-        // Update state with all calculated data
+
+        val sortedEntries = salesTrend.entries.sortedBy { it.key }
+        val trendValues = sortedEntries.map { it.value }
+
+        // Create the sales trend line
+        val salesLine = if (trendValues.isNotEmpty()) {
+            Line(
+                label = "Sales Trend",
+                values = trendValues,
+                color = SolidColor(Color(0xff016A5F)),
+                firstGradientFillColor = Color(0xff016A5F).copy(alpha = 0.5f),
+                secondGradientFillColor = Color.Transparent,
+                strokeAnimationSpec = tween(2000, easing = EaseInOutCubic),
+                gradientAnimationDelay = 1000,
+                drawStyle = DrawStyle.Stroke(width = 2.dp),
+                dotProperties = DotProperties(
+                    color = SolidColor(Color(0xff016A5F)),
+                    radius = 4.dp,
+                    enabled = true
+                ),
+                popupProperties = PopupProperties(
+                    textStyle = TextStyle(
+                        color = Color.Green,
+                        fontSize = 12.sp
+                    )
+                )
+            )
+        } else null
+        val chartData = salesLine?.let { listOf(it) } ?: emptyList()
+
         _state.update { currentState ->
             currentState.copy(
                 totalRevenue = totalRevenue,
@@ -393,7 +434,12 @@ class ReportViewModel @Inject constructor(
                 numberOfSales = numberOfSales,
                 categoryBreakdown = categoryBreakdown,
                 salesTrend = salesTrend,
-                topProducts = productSales
+                topProducts = productSales,
+                // New line chart data
+                salesTrendSortedEntries = sortedEntries,
+                salesTrendValues = trendValues,
+                salesTrendLine = salesLine,
+                salesTrendChartData = chartData
             )
         }
     }

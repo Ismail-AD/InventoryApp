@@ -29,20 +29,32 @@ fun NavGraph(userType: String?, userId: String?, isSessionValid: Boolean) {
         ) {
             composable(route = Routes.Login.route) {
                 LoginScreen(navigateToHome = {
-                    controller.navigate(Routes.Home.route)
+                    controller.navigate(Routes.Home.route) {
+                        // Clear backstack so user can't go back to login after successful auth
+                        popUpTo(Routes.Login.route) { inclusive = true }
+                    }
                 }) {
                     controller.navigate(Routes.Register.route)
                 }
             }
             composable(route = Routes.Register.route) {
                 SignupScreen(navigateToHome = {
-                    controller.navigate(Routes.Home.route)
+                    controller.navigate(Routes.Home.route) {
+                        // Clear backstack so user can't go back to register after successful signup
+                        popUpTo(Routes.Login.route) { inclusive = true }
+                    }
                 }) {
                     controller.popBackStack()
                 }
             }
             composable(route = Routes.Home.route) {
-                MainScreen()
+                MainScreen(onLogout = {
+                    // When logout is triggered from MainScreen, navigate back to Login
+                    controller.navigate(Routes.Login.route) {
+                        // Clear the entire back stack
+                        popUpTo(0) { inclusive = true }
+                    }
+                })
             }
         }
     }

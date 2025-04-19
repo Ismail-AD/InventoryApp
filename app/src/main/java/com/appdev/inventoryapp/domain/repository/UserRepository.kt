@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.Flow
 
 interface UserRepository {
     fun logout(): Flow<ResultState<Boolean>>
+    suspend fun getUserPermissions(userId: String): Flow<ResultState<UserEntity>>
     suspend fun getAllUsers(shopId: String, userId: String): Flow<ResultState<List<UserEntity>>>
     suspend fun createUser(
         userEntity: UserEntity,

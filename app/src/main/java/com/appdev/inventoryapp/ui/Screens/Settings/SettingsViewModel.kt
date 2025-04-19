@@ -1,14 +1,17 @@
 package com.appdev.inventoryapp.ui.Screens.Settings
 
 import android.Manifest
+import android.app.Application
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.appdev.inventoryapp.Utils.NotificationPreferenceManager
 import com.appdev.inventoryapp.Utils.ResultState
 import com.appdev.inventoryapp.Utils.SessionManagement
+import com.appdev.inventoryapp.Utils.StockAlarmManager
 import com.appdev.inventoryapp.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +25,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
+    private val application: Application,
     private val userRepository: UserRepository,
     private val sessionManagement: SessionManagement,
     private val notificationPreferenceManager: NotificationPreferenceManager,
@@ -36,9 +40,11 @@ class SettingsViewModel @Inject constructor(
         loadNotificationPreferences()
     }
 
+
     private fun loadUserDetails() {
         _state.update { state ->
             state.copy(
+                userRole = sessionManagement.getUserRole() ?: "",
                 shopName = sessionManagement.getShopName() ?: "",
                 userName = sessionManagement.getUserName() ?: "",
                 email = sessionManagement.getUserEmail() ?: "",
@@ -152,6 +158,8 @@ class SettingsViewModel @Inject constructor(
                 when (result) {
                     is ResultState.Success -> {
                         // Clear all user session data
+                        StockAlarmManager.cancelStockCheck(application)
+
                         sessionManagement.clearSession()
 
                         // Clear notification preferences if needed
@@ -197,10 +205,38 @@ class SettingsViewModel @Inject constructor(
     }
 
     private fun toggleLowStockNotification() {
-        if (_state.value.hasNotificationPermission) {
-            val newValue = !_state.value.isLowStockNotificationEnabled
-            notificationPreferenceManager.setLowStockNotificationEnabled(newValue)
-            _state.update { it.copy(isLowStockNotificationEnabled = newValue) }
+        viewModelScope.launch {
+            try {
+                val currentValue = _state.value.isLowStockNotificationEnabled
+                val newValue = !currentValue
+
+                // Save the new preference
+                notificationPreferenceManager.setLowStockNotificationEnabled(newValue)
+
+                // Update state
+                _state.value = _state.value.copy(
+                    isLowStockNotificationEnabled = newValue
+                )
+
+                // Handle alarm scheduling/cancellation
+                if (newValue) {
+                    // Enable alarm
+                    StockAlarmManager.scheduleStockCheck(application, _state.value.shopId)
+                } else {
+                    // Disable alarm
+                    StockAlarmManager.cancelStockCheck(application)
+                }
+
+                _state.value = _state.value.copy(
+                    showSuccessMessage = true,
+                    successMessage = if (newValue) "Low stock notifications enabled"
+                    else "Low stock notifications disabled"
+                )
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(
+                    errorMessage = e.message ?: "Failed to update notification settings"
+                )
+            }
         }
     }
 

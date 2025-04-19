@@ -46,7 +46,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 @Composable
-fun MainScreen() {
+fun MainScreen(onLogout: () -> Unit = {}) {
     val navController = rememberNavController()
 
     val hideBottomBarRoutes = listOf(
@@ -203,11 +203,7 @@ fun MainScreen() {
             }
             composable(Routes.Settings.route) {
                 SettingsScreen{
-                    navController.navigate(Routes.Login.route) {
-                        popUpTo(navController.graph.startDestinationId) {
-                            inclusive = true
-                        }
-                    }
+                    onLogout()
                 }
             }
             composable(
