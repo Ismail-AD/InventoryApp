@@ -142,7 +142,7 @@ class SignupViewModel @Inject constructor(
                 UserEntity(
                     shop_id = uniqueShopId,
                     shopName = currentState.shopName,
-                    username = currentState.userName,
+                    username = currentState.userName.trimEnd(),
                     email = currentState.email,
                     role = currentState.userRole,
                     permissions = Permission.entries.map { it.name },
@@ -175,6 +175,7 @@ class SignupViewModel @Inject constructor(
 
     private fun signup() {
         val currentState = _state.value
+        Log.d("CAZQ","${currentState}")
 
         // Validate inputs
         if (currentState.shopName.isEmpty()) {
@@ -182,6 +183,16 @@ class SignupViewModel @Inject constructor(
                 it.copy(
                     isShopNameError = true,
                     errorMessage = "Shop name cannot be empty"
+                )
+            }
+            return
+        }
+
+        if (currentState.shopName.contains(" ")) {
+            _state.update {
+                it.copy(
+                    isShopNameError = true,
+                    errorMessage = "Shop name cannot contain spaces"
                 )
             }
             return
@@ -240,7 +251,76 @@ class SignupViewModel @Inject constructor(
         // Show loading
         _state.update { it.copy(isLoading = true, errorMessage = null) }
 
-        // First check if email already exists
+        viewModelScope.launch {
+            signupRepository.checkShopNameExists(currentState.shopName).collect { result ->
+                when (result) {
+                    is ResultState.Success -> {
+                        if (result.data) {
+                            // Shop name already exists
+                            _state.update {
+                                it.copy(
+                                    isShopNameError = true,
+                                    errorMessage = "Shop name already exists. Please choose a different shop name.",
+                                    isLoading = false
+                                )
+                            }
+                        } else {
+                            // Shop name doesn't exist, now check username
+                            checkUsernameAndProceed(currentState)
+                        }
+                    }
+                    is ResultState.Failure -> {
+                        _state.update {
+                            it.copy(
+                                isLoading = false,
+                                errorMessage = result.message.localizedMessage
+                            )
+                        }
+                    }
+                    is ResultState.Loading -> {
+                        // Already in loading state
+                    }
+                }
+            }
+        }
+    }
+
+    private fun checkUsernameAndProceed(currentState: SignupState) {
+        viewModelScope.launch {
+            signupRepository.checkUsernameExists(currentState.userName).collect { result ->
+                when (result) {
+                    is ResultState.Success -> {
+                        if (result.data) {
+                            // Username already exists
+                            _state.update {
+                                it.copy(
+                                    isUsernameError = true,
+                                    errorMessage = "Username already exists. Please choose a different username.",
+                                    isLoading = false
+                                )
+                            }
+                        } else {
+                            // Username doesn't exist, now check email
+                            checkEmailAndProceed(currentState)
+                        }
+                    }
+                    is ResultState.Failure -> {
+                        _state.update {
+                            it.copy(
+                                isLoading = false,
+                                errorMessage = result.message.localizedMessage
+                            )
+                        }
+                    }
+                    is ResultState.Loading -> {
+                        // Already in loading state
+                    }
+                }
+            }
+        }
+    }
+
+    private fun checkEmailAndProceed(currentState: SignupState) {
         viewModelScope.launch {
             signupRepository.checkEmailExists(currentState.email.trim().lowercase()).collect { result ->
                 when (result) {

@@ -9,4 +9,5 @@ interface LoginRepository {
     suspend fun login(email: String, password: String): Flow<ResultState<UserSession?>>
     suspend fun fetchUserInfo(email: String): Flow<ResultState<UserEntity>>
     fun getCurrentUserId(): String?
+    suspend fun resetPassword(email: String): Flow<ResultState<Boolean>>
 }

@@ -126,6 +126,7 @@ fun CartSummaryScreenContent(
                             items(inventoryItems) { item ->
                                 state.inventoryItems.find { it.id == item.productId }?.let { matchedItem ->
                                     InventoryItemCard(
+                                        categoryName = state.categoryIdToNameMap[matchedItem.category_id]?:"",
                                         item = matchedItem,
                                         saleRecordItem = item,
                                         context = context,
@@ -194,6 +195,7 @@ fun CartSummaryScreenContent(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InventoryItemCard(
+    categoryName:String,
     item: InventoryItem,
     saleRecordItem: SaleRecordItem,
     context: Context,
@@ -207,11 +209,7 @@ fun InventoryItemCard(
     val quantity = saleRecordItem.quantity
 
     // Handle discount based on percentage or fixed amount
-    val discountAmount = if (saleRecordItem.isPercentageDiscount) {
-        originalPricePerUnit * (saleRecordItem.discountAmount / 100)
-    } else {
-        saleRecordItem.discountAmount.toDouble()
-    }
+    val discountAmount = saleRecordItem.discountAmount.toDouble()
 
     val priceAfterDiscountPerUnit = originalPricePerUnit - discountAmount
     val subtotalBeforeDiscount = originalPricePerUnit * quantity
@@ -276,7 +274,7 @@ fun InventoryItemCard(
 
                     // Basic item details
                     Text(
-                        text = "Category: ${item.category}",
+                        text = "Category: $categoryName",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         maxLines = 1,
@@ -352,7 +350,9 @@ fun InventoryItemCard(
                     if (discountAmount > 0) {
                         Spacer(modifier = Modifier.height(2.dp))
                         val discountText = if (saleRecordItem.isPercentageDiscount) {
-                            "${saleRecordItem.discountAmount.toInt()}% off"
+                            // Calculate the actual percentage from the dollar amount
+                            val calculatedPercentage = ((saleRecordItem.discountAmount / item.selling_price.toFloat()) * 100).toInt()
+                            "$calculatedPercentage% off"
                         } else {
                             "${formatter.format(saleRecordItem.discountAmount)} off"
                         }

@@ -42,19 +42,55 @@ class SettingsViewModel @Inject constructor(
 
 
     private fun loadUserDetails() {
-        _state.update { state ->
-            state.copy(
-                userRole = sessionManagement.getUserRole() ?: "",
-                shopName = sessionManagement.getShopName() ?: "",
-                userName = sessionManagement.getUserName() ?: "",
-                email = sessionManagement.getUserEmail() ?: "",
-                userId = sessionManagement.getUserId() ?: "",
-                shopId = sessionManagement.getShopId() ?: "",
-                isLoading = false
-            )
+        viewModelScope.launch {
+            _state.update { it.copy(isLoading = true) }
+
+            // Get userId from session management as we still need this to identify the user
+            val userId =  userRepository.getCurrentUserId() ?: sessionManagement.getUserId()
+            Log.d("CADS", "set myID: ${userId}")
+
+            if (userId.isNullOrEmpty()) {
+                _state.update {
+                    it.copy(
+                        errorMessage = "User ID not found",
+                        isLoading = false
+                    )
+                }
+                return@launch
+            }
+
+            userRepository.getUserById(userId).collectLatest { result ->
+                when (result) {
+                    is ResultState.Success -> {
+                        val userEntity = result.data
+                        _state.update { state ->
+                            state.copy(
+                                userRole = userEntity.role,
+                                shopName = userEntity.shopName,
+                                userName = userEntity.username,
+                                email = userEntity.email,
+                                userId = userEntity.id,
+                                shopId = userEntity.shop_id ?: "",
+                                isLoading = false
+                            )
+                        }
+                    }
+
+                    is ResultState.Failure -> {
+                        _state.update {
+                            it.copy(
+                                errorMessage = "Failed to load user details: ${result.message.localizedMessage}",
+                                isLoading = false
+                            )
+                        }
+                    }
+
+                    is ResultState.Loading -> {
+                        // Already showing loading state
+                    }
+                }
+            }
         }
-
-
     }
 
     private fun loadNotificationPreferences() {
@@ -71,7 +107,51 @@ class SettingsViewModel @Inject constructor(
 
     fun handleEvent(event: SettingsEvent) {
         when (event) {
+            is SettingsEvent.OpenPasswordDialog -> {
+                _state.update { it.copy(
+                    isEditingPassword = true,
+                    currentPassword = "",
+                    newPassword = "",
+                    confirmPassword = "",
+                    passwordError = null
+                ) }
+            }
 
+            is SettingsEvent.ClosePasswordDialog -> {
+                _state.update { it.copy(
+                    isEditingPassword = false,
+                    currentPassword = "",
+                    newPassword = "",
+                    confirmPassword = "",
+                    passwordError = null
+                ) }
+            }
+
+            is SettingsEvent.CurrentPasswordChanged -> {
+                _state.update { it.copy(currentPassword = event.password) }
+            }
+
+            is SettingsEvent.NewPasswordChanged -> {
+                _state.update {
+                    it.copy(
+                        newPassword = event.password,
+                        passwordError = validateNewPassword(event.password, it.confirmPassword)
+                    )
+                }
+            }
+
+            is SettingsEvent.ConfirmPasswordChanged -> {
+                _state.update {
+                    it.copy(
+                        confirmPassword = event.password,
+                        passwordError = validateNewPassword(it.newPassword, event.password)
+                    )
+                }
+            }
+
+            is SettingsEvent.UpdatePassword -> {
+                updatePassword()
+            }
             is SettingsEvent.ShopNameChanged -> {
                 _state.update {
                     it.copy(
@@ -178,6 +258,9 @@ class SettingsViewModel @Inject constructor(
                     }
 
                     is ResultState.Failure -> {
+                        sessionManagement.clearSession()
+                        StockAlarmManager.cancelStockCheck(application)
+                        notificationPreferenceManager.setLowStockNotificationEnabled(false)
                         _state.update {
                             it.copy(
                                 errorMessage = "Logout failed: ${result.message.localizedMessage}",
@@ -236,6 +319,86 @@ class SettingsViewModel @Inject constructor(
                 _state.value = _state.value.copy(
                     errorMessage = e.message ?: "Failed to update notification settings"
                 )
+            }
+        }
+    }
+
+    private fun validateNewPassword(newPassword: String, confirmPassword: String): String? {
+        return when {
+            newPassword.isEmpty() -> "Password cannot be empty"
+            newPassword.length < 7 -> "Password must be at least 7 characters"
+            newPassword != confirmPassword -> "Passwords do not match"
+            else -> null
+        }
+    }
+
+    private fun updatePassword() {
+        viewModelScope.launch {
+            val currentPassword = _state.value.currentPassword
+            val newPassword = _state.value.newPassword
+            val confirmPassword = _state.value.confirmPassword
+
+            // Basic validation
+            when {
+                currentPassword.isEmpty() -> {
+                    _state.update { it.copy(passwordError = "Current password cannot be empty") }
+                    return@launch
+                }
+                newPassword.isEmpty() -> {
+                    _state.update { it.copy(passwordError = "New password cannot be empty") }
+                    return@launch
+                }
+                newPassword != confirmPassword -> {
+                    _state.update { it.copy(passwordError = "Passwords do not match") }
+                    return@launch
+                }
+            }
+
+            val passwordError = validateNewPassword(newPassword, confirmPassword)
+            if (passwordError != null) {
+                _state.update { it.copy(passwordError = passwordError) }
+                return@launch
+            }
+
+            _state.update { it.copy(isLoading = true) }
+
+            try {
+                // Assuming userRepository has a method to update password
+                userRepository.updatePassword(state.value.email,currentPassword, newPassword).collectLatest { result ->
+                    when (result) {
+                        is ResultState.Success -> {
+                            _state.update {
+                                it.copy(
+                                    isEditingPassword = false,
+                                    currentPassword = "",
+                                    newPassword = "",
+                                    confirmPassword = "",
+                                    isLoading = false,
+                                    showSuccessMessage = true,
+                                    successMessage = "Password updated successfully"
+                                )
+                            }
+                        }
+                        is ResultState.Failure -> {
+                            _state.update {
+                                it.copy(
+                                    passwordError = "Failed to update password: ${result.message.localizedMessage}",
+                                    isLoading = false
+                                )
+                            }
+                        }
+                        is ResultState.Loading -> {
+                            // Already showing loading state
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(
+                        passwordError = "Error: ${e.message}",
+                        isLoading = false
+                    )
+                }
             }
         }
     }

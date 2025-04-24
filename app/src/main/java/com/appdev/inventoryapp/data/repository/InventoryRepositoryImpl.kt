@@ -29,6 +29,49 @@ class InventoryRepositoryImpl @Inject constructor(
     private val itemImageBucketId = "itemimages"
     private val itemImageFolderPath = "public/17dr9sb_2"
 
+
+    override fun checkForDuplicateItem(name: String, sku: String, shopId: String, excludeItemId: Long?): Flow<ResultState<Pair<Boolean, String>>> = flow {
+        try {
+            emit(ResultState.Loading)
+
+            // Query the inventory table for items with the same name or SKU in the given shop
+            // If excludeItemId is provided, exclude that item from the check (for updates)
+            val query = supabase
+                .from("inventory")
+                .select {
+                    filter {
+                        eq("shop_id", shopId)
+                        or {
+                            eq("name", name)
+                            eq("sku", sku)
+                        }
+                        // If we're updating an existing item, exclude it from the duplicate check
+                        if (excludeItemId != null) {
+                            neq("id", excludeItemId)
+                        }
+                    }
+                }
+
+            val duplicateItems = query.decodeList<InventoryItem>()
+
+            // Determine duplicate type
+            val duplicateType = when {
+                duplicateItems.any { it.name.equals(name, ignoreCase = true) } &&
+                        duplicateItems.any { it.sku.equals(sku, ignoreCase = true) } -> "both name and SKU"
+                duplicateItems.any { it.name.equals(name, ignoreCase = true) } -> "name"
+                duplicateItems.any { it.sku.equals(sku, ignoreCase = true) } -> "SKU"
+                else -> ""
+            }
+
+            val isDuplicate = duplicateItems.isNotEmpty()
+            emit(ResultState.Success(Pair(isDuplicate, duplicateType)))
+        } catch (e: Exception) {
+            Log.e("DUPLICATE_CHECK", "Error checking for duplicates: ${e.localizedMessage}")
+            emit(ResultState.Failure(e))
+        }
+    }
+
+
     // Step 6: Implement undoSalesRecord in InventoryRepositoryImpl
     override fun undoSalesRecord(salesRecord: SalesRecord): Flow<ResultState<String>> = flow {
         try {
@@ -129,9 +172,6 @@ class InventoryRepositoryImpl @Inject constructor(
                         {
                             // Decrease the available quantity by the sold quantity
                             set("quantity", newQuantity)
-                            // Update discount information
-                            set("discount", saleItem.discountAmount)
-                            set("discountType", saleItem.isPercentageDiscount)
                             // Update the lastUpdated timestamp
                             set("lastUpdated", System.currentTimeMillis().toString())
                         }
@@ -156,13 +196,17 @@ class InventoryRepositoryImpl @Inject constructor(
 
     override fun addCategory(
         category: Category
-    ): Flow<ResultState<String>> = flow {
+    ): Flow<ResultState<Category>> = flow {
         try {
             emit(ResultState.Loading)
-            supabase
+            val categoryAdded = supabase
                 .from("categories")
-                .insert(category)
-            emit(ResultState.Success("Category added successfully"))
+                .insert(category) {
+                    // This tells PostgreSQL to return the inserted row
+                    select()
+                }
+                .decodeSingle<Category>()
+            emit(ResultState.Success(categoryAdded))
         } catch (e: Exception) {
             emit(ResultState.Failure(e))
         }
@@ -186,6 +230,43 @@ class InventoryRepositoryImpl @Inject constructor(
                 .decodeList<Category>()
 
             emit(ResultState.Success(categories))
+        } catch (e: Exception) {
+            emit(ResultState.Failure(e))
+        }
+    }
+
+
+    override fun updateCategory(category: Category): Flow<ResultState<String>> = flow {
+        try {
+            emit(ResultState.Loading)
+
+            supabase.from("categories").update({
+                set("categoryName", category.categoryName)
+            }) {
+                filter {
+                    eq("id", category.id)
+                    eq("shop_id", category.shop_id)
+                }
+            }
+
+            emit(ResultState.Success("Category updated successfully"))
+        } catch (e: Exception) {
+            emit(ResultState.Failure(e))
+        }
+    }
+
+    override fun deleteCategory(id: Long, shopId: String): Flow<ResultState<Boolean>> = flow {
+        try {
+            emit(ResultState.Loading)
+
+            supabase.from("categories").delete {
+                filter {
+                    eq("id", id)
+                    eq("shop_id", shopId)
+                }
+            }
+
+            emit(ResultState.Success(true))
         } catch (e: Exception) {
             emit(ResultState.Failure(e))
         }
@@ -340,7 +421,7 @@ class InventoryRepositoryImpl @Inject constructor(
                         set("selling_price", item.selling_price)
                         set("imageUrls", imageUrls)
                         set("lastUpdated", System.currentTimeMillis().toString())
-                        set("categoryName", item.category)
+                        set("category_id", item.category_id)
                         set("sku", item.sku)
                         set("taxes", item.taxes)
                         set("discount", item.discountAmount)

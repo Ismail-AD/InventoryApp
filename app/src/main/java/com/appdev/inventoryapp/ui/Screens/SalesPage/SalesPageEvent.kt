@@ -11,7 +11,7 @@ sealed class SalesPageEvent {
     data class SearchQueryChanged(val query: String) : SalesPageEvent()
     data object DismissError : SalesPageEvent()
     data class UpdateSortOrder(val sortOrder: SortOrder) : SalesPageEvent()
-    data class FilterByCategory(val category: String?) : SalesPageEvent()
+    data class FilterByCategory(val categoryid:Long) : SalesPageEvent()
     data object FetchCategories : SalesPageEvent()
     data class ToggleSortMenu(val isExpanded: Boolean) : SalesPageEvent()
     data class ToggleCategoryMenu(val isExpanded: Boolean) : SalesPageEvent()
@@ -31,6 +31,7 @@ sealed class SalesPageEvent {
     // Added SalesHistory events
     data object RefreshSalesHistory : SalesPageEvent()
     data object LoadSalesHistory : SalesPageEvent()
+    data object LoadInventory : SalesPageEvent()
     data class ShowSaleDetail(val salesRecord: SalesRecord) : SalesPageEvent()
     data object HideSaleDetail : SalesPageEvent()
     data class FilterByStatus(val status: String?) : SalesPageEvent()

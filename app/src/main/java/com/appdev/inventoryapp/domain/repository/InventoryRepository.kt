@@ -8,6 +8,9 @@ import com.appdev.inventoryapp.domain.model.SalesRecord
 import kotlinx.coroutines.flow.Flow
 
 interface InventoryRepository {
+    fun updateCategory(category: Category): Flow<ResultState<String>>
+    fun deleteCategory(id: Long, shopId: String): Flow<ResultState<Boolean>>
+    fun checkForDuplicateItem(name: String, sku: String, shopId: String, excludeItemId: Long?): Flow<ResultState<Pair<Boolean, String>>>
     fun undoSalesRecord(salesRecord: SalesRecord): Flow<ResultState<String>>
     fun getSalesRecords(shopId: String): Flow<ResultState<List<SalesRecord>>>
     fun updateInventoryItems(
@@ -40,7 +43,7 @@ interface InventoryRepository {
         bucketId: String
     ): String
 
-    fun addCategory(category: Category): Flow<ResultState<String>>
+    fun addCategory(category: Category): Flow<ResultState<Category>>
     fun fetchCategories(shopId: String): Flow<ResultState<List<Category>>>
 
 

@@ -159,13 +159,17 @@ fun UndoSaleButton(onClick: () -> Unit) {
 @Composable
 fun ProductItem(item: SaleRecordItem, product: InventoryItem?) {
     val currencyFormat = NumberFormat.getCurrencyInstance()
+    val priceAfterDiscountPerUnit = item.selling_price - item.discountAmount
     val unitPrice = item.selling_price
-    val subtotal = (item.selling_price - item.discountAmount) * item.quantity
     val totalTax = if (product != null) {
-        product.taxes * item.quantity
+        val taxRate = product.taxes / 100
+        Log.d("CAZQA","${taxRate}")
+        (priceAfterDiscountPerUnit * taxRate * item.quantity).toFloat()
     } else {
         0.0f
     }
+    val subtotal = (item.selling_price - item.discountAmount.toDouble()) * item.quantity + totalTax
+
 
     // Added a Card with distinct appearance for product items in the detail view
     Card(
@@ -190,7 +194,7 @@ fun ProductItem(item: SaleRecordItem, product: InventoryItem?) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = item.productName,
+                    text = product?.name ?: "",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface,

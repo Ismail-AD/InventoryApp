@@ -12,19 +12,21 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -32,6 +34,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
+    navigateToCategories: (shopID:String) -> Unit,
     navigateToAuth: () -> Unit
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -87,8 +90,24 @@ fun SettingsScreen(
                 viewModel.updateNotificationPermissionStatus(true)
                 viewModel.handleEvent(SettingsEvent.ToggleLowStockNotification)
             }
-        }
+        },
+        navigateToCategories
     )
+    if (state.isEditingPassword) {
+        PasswordUpdateDialog(
+            currentPassword = state.currentPassword,
+            newPassword = state.newPassword,
+            confirmPassword = state.confirmPassword,
+            error = state.passwordError,
+            onCurrentPasswordChange = { viewModel.handleEvent(SettingsEvent.CurrentPasswordChanged(it)) },
+            onNewPasswordChange = { viewModel.handleEvent(SettingsEvent.NewPasswordChanged(it)) },
+            onConfirmPasswordChange = { viewModel.handleEvent(SettingsEvent.ConfirmPasswordChanged(it)) },
+            onDismiss = { viewModel.handleEvent(SettingsEvent.ClosePasswordDialog) },
+            onConfirm = { viewModel.handleEvent(SettingsEvent.UpdatePassword) },
+            isLoading = state.isLoading
+        )
+    }
+
     if (state.showNotificationGuide) {
         NotificationPermissionGuideDialog(
             onDismiss = { viewModel.handleEvent(SettingsEvent.DismissNotificationGuide) },
@@ -135,7 +154,8 @@ fun SettingsScreen(
 fun SettingsScreenContent(
     state: SettingsState,
     onEvent: (SettingsEvent) -> Unit,
-    requestNotificationPermission: () -> Unit
+    requestNotificationPermission: () -> Unit,
+    navigateToCategories: (shopID: String) -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -260,6 +280,41 @@ fun SettingsScreenContent(
                             )
                         }
                     }
+                    Divider(
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                        thickness = 0.5.dp
+                    )
+
+                    // Password section
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Password",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                            Text(
+                                text = "••••••••",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        Button(
+                            onClick = { onEvent(SettingsEvent.OpenPasswordDialog) },shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Text("Change", color = MaterialTheme.colorScheme.surface)
+                        }
+                    }
+
 
                     Divider(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
@@ -312,26 +367,47 @@ fun SettingsScreenContent(
                         thickness = 0.5.dp
                     )
                     Spacer(modifier = Modifier.height(32.dp))
-
+                    Button(
+                        onClick = { navigateToCategories(state.shopId) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp), shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xff016A5F)
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Category,
+                            contentDescription = "Categories",
+                            tint = Color.White,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Text(
+                            text = "Manage Categories",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color.White,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                     // Logout Button
                     Button(
                         onClick = { onEvent(SettingsEvent.ShowLogoutConfirmDialog) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 16.dp),
+                            .padding(vertical = 8.dp),shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error
+                            containerColor =  Color(0xffB3261E)
                         )
                     ) {
                         Icon(
                             imageVector = Icons.Default.ExitToApp,
                             contentDescription = "Logout",
-                            modifier = Modifier.padding(end = 8.dp)
+                            modifier = Modifier.padding(end = 8.dp), tint = Color.White
                         )
                         Text(
                             text = "Logout",
                             style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium, color = Color.White
                         )
                     }
 
@@ -534,6 +610,109 @@ fun LogoutConfirmDialog(
                 onClick = onConfirm
             ) {
                 Text("Yes, Logout")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun PasswordUpdateDialog(
+    currentPassword: String,
+    newPassword: String,
+    confirmPassword: String,
+    error: String?,
+    onCurrentPasswordChange: (String) -> Unit,
+    onNewPasswordChange: (String) -> Unit,
+    onConfirmPasswordChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    isLoading: Boolean
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Update Password") },
+        text = {
+            Column {
+                // Current Password
+                OutlinedTextField(
+                    value = currentPassword,
+                    onValueChange = onCurrentPasswordChange,
+                    label = { Text("Current Password") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    singleLine = true
+                )
+
+                // New Password
+                OutlinedTextField(
+                    value = newPassword,
+                    onValueChange = onNewPasswordChange,
+                    label = { Text("New Password") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    singleLine = true,
+                    isError = error != null
+                )
+
+                // Confirm New Password
+                OutlinedTextField(
+                    value = confirmPassword,
+                    onValueChange = onConfirmPasswordChange,
+                    label = { Text("Confirm New Password") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    singleLine = true,
+                    isError = error != null
+                )
+
+                // Password requirements info
+                Text(
+                    text = "Password must be at least 8 characters with uppercase, lowercase, digit, and special character",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+
+                // Show error if any
+                if (error != null) {
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+
+                if (isLoading) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = !isLoading &&
+                        currentPassword.isNotEmpty() &&
+                        newPassword.isNotEmpty() &&
+                        confirmPassword.isNotEmpty() &&
+                        error == null
+            ) {
+                Text("Update")
             }
         },
         dismissButton = {

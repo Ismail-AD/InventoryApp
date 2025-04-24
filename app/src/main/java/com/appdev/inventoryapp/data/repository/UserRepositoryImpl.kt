@@ -10,7 +10,9 @@ import com.appdev.inventoryapp.domain.repository.UserRepository
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.SignOutScope
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -25,14 +27,97 @@ class UserRepositoryImpl @Inject constructor(
         private const val USERS_TABLE = "users"
     }
 
+
+    override suspend fun updatePassword(email: String,currentPassword: String, newPassword: String): Flow<ResultState<Unit>> = flow {
+        emit(ResultState.Loading)
+        try {
+            try {
+                supabase.auth.signInWith(Email) {
+                    this.email = email
+                    this.password = currentPassword
+                }
+
+                supabase.auth.updateUser {
+                    password = newPassword
+                }
+
+                emit(ResultState.Success(Unit))
+            } catch (e: Exception) {
+                emit(ResultState.Failure(Exception("Current password is incorrect")))
+            }
+        } catch (e: Exception) {
+            emit(ResultState.Failure(e))
+        }
+    }
+
+    override suspend fun getShopIdByUserId(userId: String): Flow<ResultState<String>> = flow {
+        emit(ResultState.Loading)
+        try {
+            val user = supabase.from(USERS_TABLE)
+                .select(Columns.list("shop_id")) {
+                    filter {
+                        eq("id", userId)
+                    }
+                }
+                .decodeSingle<UserEntity>()
+
+            val shopId = user.shop_id ?: ""
+            emit(ResultState.Success(shopId))
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to fetch shop ID for user: ${e.message}", e)
+            emit(ResultState.Failure(e))
+        }
+    }
+
+
+    override fun getCurrentUserId(): String? {
+        return supabase.auth.currentUserOrNull()?.id
+    }
     override fun logout(): Flow<ResultState<Boolean>> = flow {
         emit(ResultState.Loading)
         try {
             // Sign out from Supabase
             // SignOutScope.GLOBAL will invalidate all session tokens for this user
-            supabase.auth.signOut(SignOutScope.GLOBAL)
+            supabase.auth.signOut()
             emit(ResultState.Success(true))
         } catch (e: Exception) {
+            emit(ResultState.Failure(e))
+        }
+    }
+
+    override suspend fun checkUsernameExists(username: String): Flow<ResultState<Boolean>> = flow {
+        emit(ResultState.Loading)
+        try {
+            val users = supabase.from("users")
+                .select {
+                    filter {
+                        eq("username", username.trimEnd())
+                    }
+                }
+                .decodeList<UserEntity>()
+            Log.d("CAZQ","username: ${users}")
+
+            // If the list is not empty, username exists
+            emit(ResultState.Success(users.isNotEmpty()))
+        } catch (e: Exception) {
+            emit(ResultState.Failure(e))
+        }
+    }
+
+    override suspend fun getUserById(userId: String): Flow<ResultState<UserEntity>> = flow {
+        emit(ResultState.Loading)
+        try {
+            val user = supabase.from(USERS_TABLE)
+                .select {
+                    filter {
+                        eq("id", userId)
+                    }
+                }
+                .decodeSingle<UserEntity>()
+
+            emit(ResultState.Success(user))
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to fetch user details: ${e.message}", e)
             emit(ResultState.Failure(e))
         }
     }

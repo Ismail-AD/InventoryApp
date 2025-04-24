@@ -22,6 +22,7 @@ sealed class UsersListEvent {
     data class AddUser(
         val username: String,
         val email: String,
+        val password: String, // Added password parameter
         val role: String,
         val permissions: List<Permission>
     ) : UsersListEvent()
@@ -47,4 +48,7 @@ sealed class UsersListEvent {
     data object ShowLogsDialog : UsersListEvent()
     data object HideLogsDialog : UsersListEvent()
     data object FetchAllLogs : UsersListEvent()
+
+    data class UpdatePassword(val password: String) : UsersListEvent() // Added password update event
+    data object TogglePasswordVisibility : UsersListEvent() // Added password visibility toggle
 }

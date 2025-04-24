@@ -10,7 +10,7 @@ sealed class InventoryEvent {
     data object DismissError : InventoryEvent()
     data object LoadInventory : InventoryEvent()
     data class UpdateSortOrder(val sortOrder: SortOrder) : InventoryEvent()
-    data class FilterByCategory(val category: String?) : InventoryEvent()
+    data class FilterByCategory(val categoryId: Long) : InventoryEvent()
     data object FetchCategories : InventoryEvent()
     data class ToggleSortMenu(val isExpanded: Boolean) : InventoryEvent()
     data class ToggleCategoryMenu(val isExpanded: Boolean) : InventoryEvent()

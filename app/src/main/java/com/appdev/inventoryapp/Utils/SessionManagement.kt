@@ -3,6 +3,7 @@ package com.appdev.inventoryapp.Utils
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -55,6 +56,14 @@ class SessionManagement @Inject constructor(private val sharedPreferences: Share
             putString(KEY_SHOP_NAME, shopName)
             apply()
         }
+        Log.d("CHJUKA","saved")
+    }
+
+    fun saveShop_Id(shopId: String) {
+        sharedPreferences.edit().apply {
+            putString(KEY_SHOP_ID, shopId)
+            apply()
+        }
     }
 
     fun getShopId(): String? = sharedPreferences.getString(KEY_SHOP_ID, null)
@@ -75,6 +84,6 @@ class SessionManagement @Inject constructor(private val sharedPreferences: Share
 
 
     fun clearSession() {
-        sharedPreferences.edit().clear().apply()
+        sharedPreferences.edit().clear().commit()   // blocks until written
     }
 }

@@ -1,6 +1,7 @@
 package com.appdev.inventoryapp.ui.Screens.SalesHistory
 
 import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,6 +27,7 @@ import com.appdev.inventoryapp.Utils.DateRangeFilter
 import com.appdev.inventoryapp.domain.model.SalesRecord
 import com.appdev.inventoryapp.ui.Screens.Inventory.CategoryDropdown
 import com.appdev.inventoryapp.ui.Screens.Inventory.SortDropdown
+import com.appdev.inventoryapp.ui.Screens.Reports.ReportEvent
 import com.appdev.inventoryapp.ui.Screens.SalesPage.SalesPageEvent
 import com.appdev.inventoryapp.ui.Screens.SalesPage.SalesPageState
 import com.appdev.inventoryapp.ui.Screens.SalesPage.SalesPageViewModel
@@ -39,7 +41,9 @@ fun SalesHistoryScreen(
     navigateToSalesEntry: () -> Unit // Add navigation parameter
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-
+    LaunchedEffect(Unit) {
+        viewModel.handleEvent(SalesPageEvent.LoadSalesHistory)
+    }
     SalesHistoryScreenContent(
         state = state,
         onEvent = viewModel::handleEvent,
@@ -75,6 +79,13 @@ fun SalesHistoryScreenContent(
     navigateToSalesEntry: () -> Unit // Add parameter here
 ) {
     val context = LocalContext.current
+
+    LaunchedEffect(key1 = state.showSuccessMessage) {
+        if (state.showSuccessMessage) {
+            Toast.makeText(context, state.successMessage, Toast.LENGTH_SHORT).show()
+            onEvent(SalesPageEvent.DismissSuccessMessage)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -150,10 +161,10 @@ fun SalesHistoryScreenContent(
                             )
 
                             // Category dropdown
-                            if (state.categories.isNotEmpty()) {
+                            if (state.categoryIdToNameMap.isNotEmpty()) {
                                 CategoryDropdown(
-                                    selectedCategory = state.selectedCategory,
-                                    categories = state.categories,
+                                    selectedCategoryName = state.selectedCategoryName,
+                                    categoryIdToNameMap = state.categoryIdToNameMap,
                                     isExpanded = state.isCategoryMenuExpanded,
                                     onExpandChange = {
                                         onEvent(SalesPageEvent.ToggleCategoryMenu(it))
@@ -202,7 +213,7 @@ fun SalesHistoryScreenContent(
                         }
                         // Display no matches message or sales list
                         if (state.filteredRecords.isEmpty() && (state.searchQuery.isNotEmpty() ||
-                                    state.selectedCategory != null ||
+                                    state.selectedCategoryName != null ||
                                     state.selectedStatus != null ||
                                     state.dateRangeFilter != DateRangeFilter.ALL)
                         ) {

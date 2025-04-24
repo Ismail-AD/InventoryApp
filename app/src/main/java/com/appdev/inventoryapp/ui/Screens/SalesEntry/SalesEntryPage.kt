@@ -21,8 +21,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.appdev.inventoryapp.ui.Screens.AddItem.TitledOutlinedTextField
 import com.appdev.inventoryapp.ui.Screens.DisplayInventory.InventoryEvent
-import com.appdev.inventoryapp.ui.Screens.InventoryManagemnt.TitledOutlinedTextField
 import com.appdev.inventoryapp.ui.Screens.SalesPage.SalesPageEvent
 import com.appdev.inventoryapp.ui.Screens.SalesPage.SalesPageState
 
@@ -118,6 +118,30 @@ fun ProductSalesEntryScreen(
                         singleLine = true,
                         isNumber = true
                     )
+                    if (state.discount.isNotEmpty()) {
+                        val discountValue = state.discount.toFloatOrNull() ?: 0f
+                        val sellingPrice = product.selling_price
+
+                        when {
+                            state.isPercentageDiscount && discountValue > 100 -> {
+                                Text(
+                                    text = "Warning: Discount cannot exceed 100%",
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(start = 8.dp, top = 4.dp)
+                                )
+                            }
+
+                            !state.isPercentageDiscount && discountValue > sellingPrice -> {
+                                Text(
+                                    text = "Warning: Discount cannot exceed item price ($${sellingPrice})",
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(start = 8.dp, top = 4.dp)
+                                )
+                            }
+                        }
+                    }
                     Spacer(modifier = Modifier.height(16.dp))
                     // Discount Type Switcher
                     Text(
@@ -190,11 +214,11 @@ fun ProductSalesEntryScreen(
 
                         // Product Details
                         DetailRow("SKU", product.sku)
-                        DetailRow("Category", product.category)
+                        DetailRow("Category", state.categoryIdToNameMap[product.category_id] ?: "")
                         DetailRow("Available Quantity", "${product.quantity}")
                         DetailRow("Selling Price", "$${product.selling_price}")
                         DetailRow("Cost Price", "$${product.cost_price}")
-                        DetailRow("Taxes", "$${product.taxes}")
+                        DetailRow("Taxes", "${product.taxes}%")
 
                         // Calculated total
 //                    val quantity = state.quantitySold.toIntOrNull() ?: 0
@@ -250,8 +274,12 @@ fun ProductSalesEntryScreen(
                         containerColor = MaterialTheme.colorScheme.primary
                     ),
                     enabled = (state.quantitySold.trim()
-                        .isNotEmpty() && state.quantitySold.toInt() > 0) ||
-                            (state.discount.trim().isNotEmpty() && state.discount.toFloat() > 0f)
+                        .isNotEmpty() && (state.quantitySold.toIntOrNull() ?: 0) > 0) &&
+                            !(state.discount.trim().isNotEmpty() &&
+                                    ((state.isPercentageDiscount && (state.discount.toFloatOrNull()
+                                        ?: 0f) > 100) ||
+                                            (!state.isPercentageDiscount && (state.discount.toFloatOrNull()
+                                                ?: 0f) > product.selling_price)))
                 ) {
                     Text(
                         text = "Add to Cart",

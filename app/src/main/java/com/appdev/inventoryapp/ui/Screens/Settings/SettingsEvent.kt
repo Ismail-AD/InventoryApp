@@ -18,4 +18,11 @@ sealed class SettingsEvent {
     object ShowLogoutConfirmDialog : SettingsEvent()
     object HideLogoutConfirmDialog : SettingsEvent()
     object Logout : SettingsEvent()
+
+    object OpenPasswordDialog : SettingsEvent()
+    object ClosePasswordDialog : SettingsEvent()
+    data class CurrentPasswordChanged(val password: String) : SettingsEvent()
+    data class NewPasswordChanged(val password: String) : SettingsEvent()
+    data class ConfirmPasswordChanged(val password: String) : SettingsEvent()
+    object UpdatePassword : SettingsEvent()
 }

@@ -1,4 +1,4 @@
-package com.appdev.inventoryapp.ui.Screens.InventoryManagemnt
+package com.appdev.inventoryapp.ui.Screens.AddItem
 
 import android.net.Uri
 import android.widget.Toast
@@ -18,7 +18,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -37,9 +36,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import com.appdev.inventoryapp.R
 import com.appdev.inventoryapp.ui.Reuseables.CustomLoader
-import com.appdev.inventoryapp.ui.Screens.AddItem.AddInventoryItemEvent
-import com.appdev.inventoryapp.ui.Screens.AddItem.AddInventoryItemState
-import com.appdev.inventoryapp.ui.Screens.DisplayInventory.InventoryEvent
+import com.appdev.inventoryapp.ui.Screens.InventoryManagemnt.AddInventoryItemViewModel
 
 @Composable
 fun AddInventoryItemRoot(
@@ -68,10 +65,9 @@ fun AddInventoryItemScreen(
     val context = LocalContext.current
     LaunchedEffect(key1 = state.isSuccess) {
         state.isSuccess?.let {
-            onEvent(AddInventoryItemEvent.NavigateBack)
+            onEvent(AddInventoryItemEvent.ClearForm)
         }
     }
-
 
     Scaffold(
         topBar = {
@@ -181,7 +177,7 @@ fun AddInventoryItemScreen(
                                 }
                             ) {
                                 OutlinedTextField(
-                                    value = state.category.ifBlank { "Select Category" },
+                                    value = state.categoryName.ifBlank { "Select Category" },
                                     onValueChange = {},
                                     readOnly = true,
                                     modifier = Modifier
@@ -214,13 +210,14 @@ fun AddInventoryItemScreen(
                                         onEvent(AddInventoryItemEvent.ToggleCategoryDropdown)
                                     }
                                 ) {
-                                    state.categories.forEach { category ->
+                                    state.categories.forEach { (id, name) ->
                                         DropdownMenuItem(
-                                            text = { Text(category) },
+                                            text = { Text(name) },
                                             onClick = {
                                                 onEvent(
                                                     AddInventoryItemEvent.CategoryChanged(
-                                                        category
+                                                        categoryId = id,
+                                                        categoryName = name
                                                     )
                                                 )
                                                 onEvent(AddInventoryItemEvent.ToggleCategoryDropdown)
@@ -244,7 +241,6 @@ fun AddInventoryItemScreen(
                     }
                 }
 
-
                 // SKU TextField
                 TitledOutlinedTextField(
                     title = "SKU",
@@ -263,7 +259,6 @@ fun AddInventoryItemScreen(
                     singleLine = true,
                     isNumber = true
                 )
-
 
                 // Image section
                 Column(
@@ -344,108 +339,114 @@ fun AddInventoryItemScreen(
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-
-                if (state.newCategoryDialogVisible) {
-                    AlertDialog(
-                        onDismissRequest = {
-                            onEvent(AddInventoryItemEvent.DismissNewCategoryDialog)
-                        },
-                        title = { Text("Add New Category") },
-                        text = {
-                            OutlinedTextField(
-                                value = state.newCategoryName,
-                                onValueChange = {
-                                    onEvent(AddInventoryItemEvent.NewCategoryNameChanged(it))
-                                },
-                                label = { Text("Category Name") },
-                                singleLine = true
-                            )
-                        },
-                        confirmButton = {
-                            TextButton(
-                                onClick = { onEvent(AddInventoryItemEvent.SaveNewCategory) },
-                                enabled = state.newCategoryName.trim().isNotBlank()
-                            ) {
-                                Text("Save")
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(
-                                onClick = { onEvent(AddInventoryItemEvent.DismissNewCategoryDialog) }
-                            ) {
-                                Text("Cancel")
-                            }
-                        }
-                    )
-                }
-                if (state.showConfirmationModal) {
-                    AlertDialog(
-                        onDismissRequest = { onEvent(AddInventoryItemEvent.DismissConfirmationModal) },
-                        title = { Text("Confirm Item Submission") },
-                        text = {
-                            Column {
-                                Text("Are you sure you want to add/update this inventory item?")
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(top = 8.dp)
-                                ) {
-                                    Checkbox(
-                                        checked = state.dontShowConfirmationAgain,
-                                        onCheckedChange = {
-                                            onEvent(
-                                                AddInventoryItemEvent.SetDontShowConfirmationAgain(
-                                                    it
-                                                )
-                                            )
-                                        }
-                                    )
-                                    Text("Don't show this again")
-                                }
-                            }
-                        },
-                        confirmButton = {
-                            TextButton(onClick = { onEvent(AddInventoryItemEvent.ConfirmSubmit) }) {
-                                Text("Confirm")
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { onEvent(AddInventoryItemEvent.DismissConfirmationModal) }) {
-                                Text("Cancel")
-                            }
-                        }
-                    )
-                }
-
             }
 
+            // Display dialogs
+            if (state.newCategoryDialogVisible) {
+                AlertDialog(
+                    onDismissRequest = {
+                        onEvent(AddInventoryItemEvent.DismissNewCategoryDialog)
+                    },
+                    title = { Text("Add New Category") },
+                    text = {
+                        OutlinedTextField(
+                            value = state.newCategoryName,
+                            onValueChange = {
+                                onEvent(AddInventoryItemEvent.NewCategoryNameChanged(it))
+                            },
+                            label = { Text("Category Name") },
+                            singleLine = true
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = { onEvent(AddInventoryItemEvent.SaveNewCategory) },
+                            enabled = state.newCategoryName.trim().isNotBlank()
+                        ) {
+                            Text("Save")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = { onEvent(AddInventoryItemEvent.DismissNewCategoryDialog) }
+                        ) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+
+            if (state.showConfirmationModal) {
+                AlertDialog(
+                    onDismissRequest = { onEvent(AddInventoryItemEvent.DismissConfirmationModal) },
+                    title = { Text("Confirm Item Submission") },
+                    text = {
+                        Column {
+                            Text("Are you sure you want to add/update this inventory item?")
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(top = 8.dp)
+                            ) {
+                                Checkbox(
+                                    checked = state.dontShowConfirmationAgain,
+                                    onCheckedChange = {
+                                        onEvent(
+                                            AddInventoryItemEvent.SetDontShowConfirmationAgain(
+                                                it
+                                            )
+                                        )
+                                    }
+                                )
+                                Text("Don't show this again")
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { onEvent(AddInventoryItemEvent.ConfirmSubmit) }) {
+                            Text("Confirm")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { onEvent(AddInventoryItemEvent.DismissConfirmationModal) }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+
+            // Show error or success messages
             state.errorMessage?.let { errorMessage ->
                 ShowSnack(
                     modifier = Modifier
                         .padding(16.dp)
-                        .align(Alignment.BottomCenter), errorMessage
-                ) {
-                    onEvent(AddInventoryItemEvent.DismissError)
-                }
-            }
-            state.isSuccess?.let { message ->
-                ShowSnack(
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .align(Alignment.BottomCenter), message
-                ) {
-                    onEvent(AddInventoryItemEvent.DismissError)
-                }
-            }
-            state.newCategoryAddedMessage?.let { message ->
-                ShowSnack(
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .align(Alignment.BottomCenter), message
+                        .align(Alignment.BottomCenter),
+                    message = errorMessage
                 ) {
                     onEvent(AddInventoryItemEvent.DismissError)
                 }
             }
 
+            state.isSuccess?.let { message ->
+                ShowSnack(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .align(Alignment.BottomCenter),
+                    message = message
+                ) {
+                    onEvent(AddInventoryItemEvent.DismissError)
+                }
+            }
+
+            state.newCategoryAddedMessage?.let { message ->
+                ShowSnack(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .align(Alignment.BottomCenter),
+                    message = message
+                ) {
+                    onEvent(AddInventoryItemEvent.DismissError)
+                }
+            }
         }
     }
 }

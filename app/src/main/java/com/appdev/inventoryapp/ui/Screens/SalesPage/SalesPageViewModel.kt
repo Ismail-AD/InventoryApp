@@ -39,11 +39,9 @@ class SalesPageViewModel @Inject constructor(
     private val _state = MutableStateFlow(SalesPageState(isLoading = true))
     val state: StateFlow<SalesPageState> = _state.asStateFlow()
 
+
     init {
         loadInventory(sessionManagement.getShopId())
-        loadSalesHistory(sessionManagement.getShopId())
-        fetchCategories()
-        loadUserPermissions()
     }
 
     private fun createSalesAuditLog(
@@ -89,6 +87,7 @@ class SalesPageViewModel @Inject constructor(
             }
         }
     }
+
     private fun formatTimestamp(timestamp: Long): String {
         val dateFormat = SimpleDateFormat("MMM d, yyyy 'at' h:mm a", Locale.getDefault())
         return dateFormat.format(Date(timestamp))
@@ -96,19 +95,21 @@ class SalesPageViewModel @Inject constructor(
 
     private fun loadUserPermissions() {
         viewModelScope.launch {
-            sessionManagement.getUserId()?.let { myId ->
-                userRepository.getUserPermissions(myId).collect { result ->
+            val myId = userRepository.getCurrentUserId() ?: sessionManagement.getUserId()
+            Log.d("CADS", "myID: ${myId}")
+
+            if (myId != null) {
+                userRepository.getUserById(myId).collect { result ->
                     when (result) {
                         is ResultState.Loading -> {
                             _state.update { it.copy(isLoading = true) }
                         }
 
                         is ResultState.Success -> {
-                            Log.d("CADS", "${result.data}")
+                            Log.d("CADS", "${myId} ${result.data}")
                             _state.update {
                                 it.copy(
                                     userPermissions = result.data.permissions ?: emptyList(),
-                                    isLoading = false,
                                     errorMessage = null
                                 )
                             }
@@ -217,7 +218,7 @@ class SalesPageViewModel @Inject constructor(
             }
 
             is SalesPageEvent.FilterByCategory -> {
-                filterByCategory(event.category)
+                filterByCategory(event.categoryid)
                 _state.update { it.copy(isCategoryMenuExpanded = false) }
             }
 
@@ -230,36 +231,73 @@ class SalesPageViewModel @Inject constructor(
                         it.copy(successMessage = null)
                     }
                 }
-                val quantitySold = state.value.quantitySold.toIntOrNull() ?: 0
-                val availableQuantity =
-                    _state.value.inventoryItems.find { it.id == event.item.id }?.quantity ?: 0
 
-                if (quantitySold > availableQuantity) {
-                    _state.update {
-                        it.copy(
-                            errorMessage = "Error: Quantity sold cannot exceed available quantity",
-                            showSuccessMessage = false
+                val quantitySold = state.value.quantitySold.toIntOrNull() ?: 0
+                val availableQuantity = _state.value.inventoryItems.find { it.id == event.item.id }?.quantity ?: 0
+                val itemPrice = event.item.selling_price
+                val enteredDiscount = state.value.discount.toFloatOrNull() ?: 0.0f
+
+                // Validate discount based on type
+                when {
+                    // Case 1: Invalid quantity
+                    quantitySold > availableQuantity -> {
+                        _state.update {
+                            it.copy(
+                                errorMessage = "Error: Quantity sold cannot exceed available quantity",
+                                showSuccessMessage = false
+                            )
+                        }
+                    }
+                    // Case 2: Percentage discount exceeds 100%
+                    state.value.isPercentageDiscount && enteredDiscount > 100 -> {
+                        _state.update {
+                            it.copy(
+                                errorMessage = "Error: Percentage discount cannot exceed 100%",
+                                showSuccessMessage = false
+                            )
+                        }
+                    }
+                    // Case 3: Flat discount exceeds item price
+                    !state.value.isPercentageDiscount && enteredDiscount > itemPrice -> {
+                        _state.update {
+                            it.copy(
+                                errorMessage = "Error: Discount amount cannot exceed item price",
+                                showSuccessMessage = false
+                            )
+                        }
+                    }
+                    // Valid input case
+                    else -> {
+                        // Calculate the final discount amount to be stored
+                        val finalDiscountAmount = when (state.value.isPercentageDiscount) {
+                            true -> {
+                                // If percentage, calculate the actual amount based on selling price
+                                ((enteredDiscount / 100f) * itemPrice).toFloat()
+                            }
+                            false -> {
+                                // If absolute value, use as is
+                                enteredDiscount
+                            }
+                        }
+
+                        val item = SaleRecordItem(
+                            quantity = quantitySold,
+                            discountAmount = finalDiscountAmount,
+                            isPercentageDiscount = state.value.isPercentageDiscount,
+                            sku = event.item.sku,
+                            productId = event.item.id,
+                            selling_price = event.item.selling_price,
                         )
+                        Log.d("CHKLZ","${item}")
+                        val currentMap = state.value.itemQuantityMap
+                        val updatedMap = currentMap.toMutableMap().apply {
+                            this[event.item.id] = availableQuantity
+                        }
+                        _state.update {
+                            it.copy(itemQuantityMap = updatedMap)
+                        }
+                        addItemToCart(item)
                     }
-                } else {
-                    val item = SaleRecordItem(
-                        quantity = quantitySold,
-                        discountAmount = state.value.discount.toFloatOrNull() ?: 0.0f,
-                        isPercentageDiscount = state.value.isPercentageDiscount,
-                        productName = event.item.name,
-                        sku = event.item.sku,
-                        productId = event.item.id,
-                        selling_price = event.item.selling_price,
-                        category = event.item.category
-                    )
-                    val currentMap = state.value.itemQuantityMap
-                    val updatedMap = currentMap.toMutableMap().apply {
-                        this[event.item.id] = availableQuantity
-                    }
-                    _state.update {
-                        it.copy(itemQuantityMap = updatedMap)
-                    }
-                    addItemToCart(item)
                 }
             }
 
@@ -302,7 +340,15 @@ class SalesPageViewModel @Inject constructor(
 
             // Added SalesHistory events
             is SalesPageEvent.RefreshSalesHistory -> loadSalesHistory(sessionManagement.getShopId())
-            is SalesPageEvent.LoadSalesHistory -> loadSalesHistory(sessionManagement.getShopId())
+            is SalesPageEvent.LoadSalesHistory -> {
+                loadUserPermissions()
+                loadSalesHistory(sessionManagement.getShopId())
+                fetchCategories()
+            }
+            is SalesPageEvent.LoadInventory -> {
+                loadInventory(sessionManagement.getShopId())
+                fetchCategories()
+            }
             is SalesPageEvent.ShowSaleDetail -> {
                 _state.update {
                     it.copy(
@@ -344,7 +390,7 @@ class SalesPageViewModel @Inject constructor(
 
                     is ResultState.Success -> {
                         val itemDetails = salesRecord.salesRecordItem.joinToString(", ") {
-                            "${it.quantity}x ${it.productName}"
+                            "${it.quantity}x ${state.value.inventoryItems.find { item -> item.id == it.productId }?.name}"
                         }
                         val changes = listOf("Reversed sale containing: $itemDetails")
 
@@ -398,6 +444,7 @@ class SalesPageViewModel @Inject constructor(
 
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
+            Log.d("CHKLZ","${salesRecord}")
 
             repository.updateInventoryItems(
                 salesRecord,
@@ -476,9 +523,17 @@ class SalesPageViewModel @Inject constructor(
                         }
 
                         is ResultState.Success -> {
+                            val idToName = result.data.associate { category ->
+                                category.id to category.categoryName
+                            }
+                            val nameToId = result.data.associate { category ->
+                                category.categoryName to category.id
+                            }
+
                             _state.update {
                                 it.copy(
-                                    categories = result.data.map { category -> category.categoryName },
+                                    categoryIdToNameMap = idToName,
+                                    categoryNameToIdMap = nameToId,
                                     isLoading = false
                                 )
                             }
@@ -508,10 +563,11 @@ class SalesPageViewModel @Inject constructor(
         applySalesHistoryFilters()
     }
 
-    private fun filterByCategory(category: String?) {
-        _state.update { it.copy(selectedCategory = category) }
-        applyFilters()
-        // Also apply filters for sales history
+    private fun filterByCategory(categoryId: Long) {
+        _state.update { it.copy(
+            selectedCategoryId = categoryId,
+            selectedCategoryName = if (categoryId == -1L) null else state.value.categoryIdToNameMap[categoryId]
+        ) }
         applySalesHistoryFilters()
     }
 
@@ -566,12 +622,11 @@ class SalesPageViewModel @Inject constructor(
         }
 
         // Apply category filter
-        if (currentState.selectedCategory != null) {
+        if (currentState.selectedCategoryId != -1L) {
             filteredItems = filteredItems.filter { item ->
-                item.category == currentState.selectedCategory
+                item.category_id == currentState.selectedCategoryId
             }
         }
-
         // Apply sorting
         filteredItems = when (currentState.currentSortOrder) {
             SortOrder.NEWEST_FIRST -> filteredItems.sortedByDescending { it.lastUpdated }
@@ -764,6 +819,7 @@ class SalesPageViewModel @Inject constructor(
         var filteredRecords = currentState.salesRecords
 
         if (currentState.startDate != null && currentState.endDate != null) {
+            // Date filter code remains unchanged
             filteredRecords = filteredRecords.filter { record ->
                 val recordTimestamp = record.lastUpdated.toLong()
                 val recordDate = Date(recordTimestamp)
@@ -774,42 +830,40 @@ class SalesPageViewModel @Inject constructor(
             }
         }
 
-        // Apply search query filter
+        // Apply search query filter - remains unchanged
         if (currentState.searchQuery.isNotEmpty()) {
             filteredRecords = filteredRecords.filter { record ->
                 record.salesRecordItem.any { item ->
-                    item.productName.contains(currentState.searchQuery, ignoreCase = true) ||
+                    val productData = state.value.inventoryItems.find { items -> items.id == item.productId }?.name ?: ""
+                    productData.contains(
+                        currentState.searchQuery,
+                        ignoreCase = true
+                    ) ||
                             item.sku.contains(currentState.searchQuery, ignoreCase = true)
                 }
             }
         }
 
-        // Apply category filter
-        if (currentState.selectedCategory != null) {
+        // Apply category filter - CHANGE HERE TO USE CATEGORY ID
+        if (currentState.selectedCategoryId != -1L) {
             filteredRecords = filteredRecords.filter { record ->
                 record.salesRecordItem.any { item ->
-                    item.category == currentState.selectedCategory
+                    val productCategoryId = state.value.inventoryItems.find {
+                            items -> items.id == item.productId
+                    }?.category_id ?: -1L
+                    productCategoryId == currentState.selectedCategoryId
                 }
             }
         }
 
-        // Apply status filter
+        // Status filter remains unchanged
         if (currentState.selectedStatus != null) {
             filteredRecords = filteredRecords.filter { record ->
                 record.status == currentState.selectedStatus
             }
         }
 
-        // Apply date range filter
-        if (currentState.startDate != null && currentState.endDate != null) {
-            filteredRecords = filteredRecords.filter { record ->
-                val recordTimestamp = record.lastUpdated.toLong()
-                val recordDate = Date(recordTimestamp)
-                recordDate.after(currentState.startDate) && recordDate.before(currentState.endDate)
-            }
-        }
-
-        // Apply sorting
+        // Sort order remains unchanged
         filteredRecords = when (currentState.currentSortOrder) {
             SortOrder.NEWEST_FIRST -> filteredRecords.sortedByDescending { it.lastUpdated }
             SortOrder.OLDEST_FIRST -> filteredRecords.sortedBy { it.lastUpdated }

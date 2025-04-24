@@ -43,7 +43,9 @@ fun SalesPageScreen(
 
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-
+    LaunchedEffect(Unit) {
+        viewModel.handleEvent(SalesPageEvent.LoadInventory)
+    }
     Log.d("CHKINF","${state.cartItems}")
     SalesPageScreenContent(
         state = state,
@@ -139,10 +141,10 @@ fun SalesPageScreenContent(
                             )
 
                             // Category dropdown
-                            if (state.categories.isNotEmpty()) {
+                            if (state.categoryIdToNameMap.isNotEmpty()) {
                                 CategoryDropdown(
-                                    selectedCategory = state.selectedCategory,
-                                    categories = state.categories,
+                                    selectedCategoryName = state.selectedCategoryName,
+                                    categoryIdToNameMap = state.categoryIdToNameMap,
                                     isExpanded = state.isCategoryMenuExpanded,
                                     onExpandChange = {
                                         onEvent(SalesPageEvent.ToggleCategoryMenu(it))
@@ -158,7 +160,7 @@ fun SalesPageScreenContent(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         // Display no matches message or item list
-                        if (state.filteredItems.isEmpty() && (state.searchQuery.isNotEmpty() || state.selectedCategory != null)) {
+                        if (state.filteredItems.isEmpty() && (state.searchQuery.isNotEmpty() || state.selectedCategoryName != null)) {
                             NoMatchesFoundMessage(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -193,24 +195,24 @@ fun SalesPageScreenContent(
             }
 
             // Show success message when item added to cart
-            if (state.showSuccessMessage) {
-                Snackbar(
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .align(Alignment.BottomCenter),
-                    action = {
-                        TextButton(onClick = { onEvent(SalesPageEvent.DismissSuccessMessage) }) {
-                            Text("Dismiss", color = MaterialTheme.colorScheme.onPrimary)
-                        }
-                    },
-                    containerColor = MaterialTheme.colorScheme.primary
-                ) {
-                    Text(
-                        text = "Item added to cart",
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
-            }
+//            if (state.showSuccessMessage) {
+//                Snackbar(
+//                    modifier = Modifier
+//                        .padding(16.dp)
+//                        .align(Alignment.BottomCenter),
+//                    action = {
+//                        TextButton(onClick = { onEvent(SalesPageEvent.DismissSuccessMessage) }) {
+//                            Text("Dismiss", color = MaterialTheme.colorScheme.onPrimary)
+//                        }
+//                    },
+//                    containerColor = MaterialTheme.colorScheme.primary
+//                ) {
+//                    Text(
+//                        text = "Item added to cart",
+//                        color = MaterialTheme.colorScheme.onPrimary
+//                    )
+//                }
+//            }
         }
     }
 }

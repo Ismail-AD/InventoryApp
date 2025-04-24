@@ -30,9 +30,10 @@ import androidx.navigation.navArgument
 import com.appdev.inventoryapp.domain.model.BottomNavItem
 import com.appdev.inventoryapp.domain.model.InventoryItem
 import com.appdev.inventoryapp.navigation.Routes
+import com.appdev.inventoryapp.ui.Screens.AddItem.AddInventoryItemRoot
 import com.appdev.inventoryapp.ui.Screens.CartSummary.CartSummaryScreen
+import com.appdev.inventoryapp.ui.Screens.Categories.CategoryListScreen
 import com.appdev.inventoryapp.ui.Screens.Inventory.InventoryScreen
-import com.appdev.inventoryapp.ui.Screens.InventoryManagemnt.AddInventoryItemRoot
 import com.appdev.inventoryapp.ui.Screens.InventoryManagemnt.AddInventoryItemViewModel
 import com.appdev.inventoryapp.ui.Screens.ProductDetails.ProductDetailScreen
 import com.appdev.inventoryapp.ui.Screens.Reports.ReportsScreen
@@ -51,9 +52,10 @@ fun MainScreen(onLogout: () -> Unit = {}) {
 
     val hideBottomBarRoutes = listOf(
         Routes.AddProduct.route + "/{productJson}?",
-        Routes.ProductDetail.route + "/{productJson}",
+        Routes.ProductDetail.route + "/{productJson}/{categoryName}",
         Routes.SalesEntry.route + "/{productJson}",
         Routes.CartSummary.route,
+        Routes.CategoryManagement.route,
         Routes.ProductSearch.route,
     )
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
@@ -106,9 +108,9 @@ fun MainScreen(onLogout: () -> Unit = {}) {
             composable(Routes.InventoryManagement.route) {
                 InventoryScreen(navigateToAddItem = {
                     navController.navigate(Routes.AddProduct.route + "/{}")
-                }, navigateToItemDetail = {
-                    val productJson = Uri.encode(Json.encodeToString(it))
-                    navController.navigate(Routes.ProductDetail.route + "/$productJson")
+                }, navigateToItemDetail = { product, categoryName ->
+                    val productJson = Uri.encode(Json.encodeToString(product))
+                    navController.navigate(Routes.ProductDetail.route + "/$productJson/$categoryName")
                 }) {
                     navController.navigate(
                         Routes.AddProduct.route + "/${
@@ -201,29 +203,44 @@ fun MainScreen(onLogout: () -> Unit = {}) {
             composable(Routes.UserManagement.route) {
                 UsersManagementScreen { }
             }
+            composable(Routes.CategoryManagement.route) {
+                CategoryListScreen {
+                    navController.navigateUp()
+                }
+            }
             composable(Routes.Settings.route) {
-                SettingsScreen{
+                SettingsScreen(
+                    navigateToCategories = {
+                        navController.navigate(Routes.CategoryManagement.route)
+                    }
+                ){
                     onLogout()
                 }
             }
             composable(
-                route = Routes.ProductDetail.route + "/{productJson}",
+                route = Routes.ProductDetail.route + "/{productJson}/{categoryName}",
                 arguments = listOf(
                     navArgument("productJson") {
+                        type = NavType.StringType
+                    },
+
+                    navArgument("categoryName") {
                         type = NavType.StringType
                     }
                 )
             ) { backStackEntry ->
                 val productJson = backStackEntry.arguments?.getString("productJson") ?: ""
+                val categoryName = backStackEntry.arguments?.getString("categoryName")
+
                 val decodedProduct = try {
                     Json.decodeFromString<InventoryItem>(Uri.decode(productJson))
                 } catch (e: Exception) {
                     null
                 }
 
-                if (decodedProduct != null) {
+                if (decodedProduct != null && categoryName!=null) {
                     ProductDetailScreen(
-                        product = decodedProduct,
+                        product = decodedProduct,categoryName,
                         onBackPressed = {
                             navController.navigateUp()
                         }

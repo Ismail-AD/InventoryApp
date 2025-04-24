@@ -20,6 +20,7 @@ sealed class Routes(val route: String) {
     data object SalesHistory : Routes("sales_history_screen")
     data object ProductSearch : Routes("product_search_screen")
     data object CartSummary : Routes("cart_summary_screen")
+    data object CategoryManagement : Routes("categories_screen")
 
     // Reports and Analytics
     data object ReportsAndAnalytics : Routes("reports_and_analytics_screen")

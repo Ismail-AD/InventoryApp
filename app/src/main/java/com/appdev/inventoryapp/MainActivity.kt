@@ -3,6 +3,7 @@ package com.appdev.inventoryapp
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -32,13 +33,18 @@ class MainActivity : ComponentActivity() {
     lateinit var supabaseClient: SupabaseClient
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val userType = sessionManagement.getUserRole()
-        val userId = sessionManagement.getUserId()
 
 
 //        enableEdgeToEdge()
         lifecycleScope.launch {
             val isSessionValid = refreshSessionIfNeeded()
+
+            Log.d("SESSIONINFO","${isSessionValid}")
+            // Only attempt to get userRole and userId if the session is valid
+            val userType = if(isSessionValid) sessionManagement.getUserRole() else null
+            val userId = if(isSessionValid) sessionManagement.getUserId() else null
+            Log.d("SESSIONINFO","${userType} & id ${userId}")
+
             setContent {
                 InventoryAppTheme {
                     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
@@ -53,28 +59,42 @@ class MainActivity : ComponentActivity() {
 
 
     private suspend fun refreshSessionIfNeeded(): Boolean {
-        if (!sessionManagement.isSessionValid() && sessionManagement.getRefreshToken() != null) {
-            try {
-                val getRefreshToken = sessionManagement.getRefreshToken()
 
-                val session =
-                    supabaseClient.auth.refreshSession(getRefreshToken!!)
+        // Are both local stores totally empty? -> no session
+        val prefsToken   = sessionManagement.getAccessToken()
+        val supaSession  = supabaseClient.auth.currentSessionOrNull()
+        if (prefsToken == null && supaSession == null) return false
 
+        // mismatch -> wipe everything
+        if (prefsToken == null && supaSession != null) {
+            supabaseClient.auth.signOut()
+            return false
+        }
+
+        // from here prefsToken is not null
+        if (!sessionManagement.isSessionValid()) {
+            val refresh = sessionManagement.getRefreshToken() ?: return false
+            return try {
+                val session = supabaseClient.auth.refreshSession(refresh)
                 sessionManagement.saveSession(
-                    accessToken = session.accessToken,
-                    refreshToken = session.refreshToken,
-                    expiresAt = session.expiresAt.epochSeconds,
-                    userId = session.user!!.id,
-                    userEmail = session.user!!.email ?: ""
+                    session.accessToken,
+                    session.refreshToken,
+                    session.expiresAt.epochSeconds,
+                    session.user!!.id,
+                    session.user!!.email ?: ""
                 )
-                return true
+                true
             } catch (e: Exception) {
+                supabaseClient.auth.signOut()
                 sessionManagement.clearSession()
-                return false
+                false
             }
         }
-        return sessionManagement.isSessionValid()
+
+        return true           // prefs say it is still valid
     }
+
+
 
 }
 

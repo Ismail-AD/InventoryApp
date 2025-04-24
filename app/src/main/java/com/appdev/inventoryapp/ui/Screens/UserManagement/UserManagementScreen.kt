@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -15,6 +16,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -57,7 +61,7 @@ fun UsersManagementScreenContent(
 ) {
     Scaffold(
         floatingActionButton = {
-            if (state.users.isNotEmpty()) {
+            if (state.users.isNotEmpty() && state.userPermissions.contains(Permission.MANAGE_USERS.name)) {
                 FloatingActionButton(
                     onClick = { onEvent(UsersListEvent.ShowAddUserDialog) },
                     containerColor = MaterialTheme.colorScheme.primary
@@ -737,7 +741,16 @@ fun AddUserDialog(
                     onValueChange = { onEvent(UsersListEvent.UpdateUsername(it)) },
                     label = { Text("Username") },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    isError = state.usernameError != null,
+                    supportingText = {
+                        state.usernameError?.let {
+                            Text(
+                                text = it,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -752,6 +765,47 @@ fun AddUserDialog(
                     isError = state.emailError != null,
                     supportingText = {
                         state.emailError?.let {
+                            Text(
+                                text = it,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Password field with visibility toggle
+                OutlinedTextField(
+                    value = state.password,
+                    onValueChange = { onEvent(UsersListEvent.UpdatePassword(it)) },
+                    label = { Text("Password") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    isError = state.passwordError != null,
+                    visualTransformation = if (state.showPassword)
+                        VisualTransformation.None
+                    else
+                        PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password
+                    ),
+                    trailingIcon = {
+                        IconButton(onClick = { onEvent(UsersListEvent.TogglePasswordVisibility) }) {
+                            Icon(
+                                imageVector = if (state.showPassword)
+                                    Icons.Default.VisibilityOff
+                                else
+                                    Icons.Default.Visibility,
+                                contentDescription = if (state.showPassword)
+                                    "Hide password"
+                                else
+                                    "Show password"
+                            )
+                        }
+                    },
+                    supportingText = {
+                        state.passwordError?.let {
                             Text(
                                 text = it,
                                 color = MaterialTheme.colorScheme.error
@@ -868,7 +922,8 @@ fun AddUserDialog(
                                         username = state.username,
                                         email = state.email,
                                         role = role,
-                                        permissions = state.selectedPermissions
+                                        permissions = state.selectedPermissions,
+                                        password = state.password
                                     )
                                 )
                             }
@@ -931,7 +986,16 @@ fun EditUserDialog(
                     onValueChange = { onEvent(UsersListEvent.UpdateEditUsername(it)) },
                     label = { Text("Username") },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    isError = state.usernameError != null,
+                    supportingText = {
+                        state.usernameError?.let {
+                            Text(
+                                text = it,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))

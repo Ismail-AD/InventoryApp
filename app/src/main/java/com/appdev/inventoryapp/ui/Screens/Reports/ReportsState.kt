@@ -7,43 +7,35 @@ import java.time.LocalDate
 
 data class ReportState(
     val isLoading: Boolean = false,
+    val errorMessage: String? = null,
+    val inventoryItems: List<InventoryItem> = emptyList(),
     val salesRecords: List<SalesRecord> = emptyList(),
     val filteredSalesRecords: List<SalesRecord> = emptyList(),
-    val inventoryItems: List<InventoryItem> = emptyList(),
-    val errorMessage: String? = null,
-
-    // KPI data
+    val categories: List<String> = emptyList(),
+    val salespeople: List<String> = emptyList(),
+    val startDate: LocalDate = LocalDate.now().minusMonths(1),
+    val endDate: LocalDate = LocalDate.now(),
+    val selectedCategory: String? = null,
+    val selectedSalesperson: String? = null,
     val totalRevenue: Double = 0.0,
     val totalProfit: Double = 0.0,
     val numberOfSales: Int = 0,
-
-    // Filter params
-    val selectedCategory: String? = null,
-    val selectedSalesperson: String? = null,
-    val startDate: LocalDate = LocalDate.now().minusMonths(1), // Default one month ago
-    val endDate: LocalDate = LocalDate.now(),                  // Default today
-
-
-    // Add these new properties for individual date pickers
+    val categoryBreakdown: Map<String, Double> = emptyMap(),
+    val salesTrend: Map<String, Double> = emptyMap(),
+    val topProducts: List<Pair<String, Int>> = emptyList(),
+    val isDateRangePickerVisible: Boolean = false,
+    val isCategoryFilterExpanded: Boolean = false,
+    val isSalespersonFilterExpanded: Boolean = false,
     val showStartDatePicker: Boolean = false,
     val showEndDatePicker: Boolean = false,
     val tempStartDate: LocalDate? = null,
     val tempEndDate: LocalDate? = null,
-
-    // Filter UI states
-    val isDateRangePickerVisible: Boolean = false,
-    val isCategoryFilterExpanded: Boolean = false,
-    val isSalespersonFilterExpanded: Boolean = false,
-
-    // Chart data
-    val categoryBreakdown: Map<String, Double> = emptyMap(),
-    val salesTrend: Map<String, Double> = emptyMap(),
-    val topProducts: List<Pair<String, Int>> = emptyList(),
-    val categories: List<String> = emptyList(),
-    val salespeople: List<String> = emptyList(),
-
+    // Added for line chart data
+    val salesTrendSortedEntries: List<Map.Entry<String, Double>> = emptyList(),
+    val salesTrendValues: List<Double> = emptyList(),
     val salesTrendLine: Line? = null,
     val salesTrendChartData: List<Line> = emptyList(),
-    val salesTrendSortedEntries: List<Map.Entry<String, Double>> = emptyList(),
-    val salesTrendValues: List<Double> = emptyList()
+    // Added for category ID mapping
+    val categoryIdToNameMap: Map<Long, String> = emptyMap(),
+    val categoryNameToIdMap: Map<String, Long> = emptyMap()
 )

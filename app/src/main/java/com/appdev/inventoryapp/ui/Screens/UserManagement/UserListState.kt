@@ -39,10 +39,12 @@ data class UsersListState(
     val auditLogError: String? = null,
     val showAuditLogDialog: Boolean = false,
     val selectedUserForAuditLog: UserEntity? = null,
-
+    val usernameError: String? = null,
     val showLogsDialog: Boolean = false,
     val logsData: List<AuditLogEntry> = emptyList(),
     val isLogsLoading: Boolean = false,
     val userPermissions: List<String> = emptyList(),
-
+    val password: String = "", // Added password field
+    val showPassword: Boolean = false, // For password visibility toggle
+    val passwordError: String? = null, // Added password error field
     )

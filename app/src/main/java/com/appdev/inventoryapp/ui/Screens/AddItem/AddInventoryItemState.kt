@@ -7,35 +7,31 @@ import kotlinx.serialization.SerialName
 
 @Stable
 data class AddInventoryItemState(
+    val itemId: Long? = null,
+    val shop_id: String = "",
+    val creator_id: String = "",
     val name: String = "",
     val quantity: String = "",
     val costPrice: String = "",
     val sellingPrice: String = "",
-    val imageUris: List<Uri> = listOf(),
+    val categoryId: Long = -1L, // Changed from category: String = ""
+    val categoryName: String = "", // Added to display category name in UI
+    val sku: String = "",
+    val taxes: String = "",
+    val imageUris: List<Uri> = emptyList(),
+    val initialImageUrls: List<String> = emptyList(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val isSuccess: String? = null,
-
-    // New fields
-    val category: String = "",
-    val categories: List<String> = emptyList(),
     val categoryDropdownExpanded: Boolean = false,
+    val categories: List<Pair<Long, String>> = emptyList(), // Changed to store id and name pairs
+    val categoriesLoading: Boolean = false,
+    val categoriesLoadError: String? = null,
+    val listOfImageByteArrays: List<ByteArray?> = emptyList(),
     val newCategoryDialogVisible: Boolean = false,
     val newCategoryName: String = "",
-    val categoriesLoadError: String? = null, // Track category loading errors
-    val categoriesLoading: Boolean = false, // Track category loading state
-    val newCategoryAddError: String? = null, // Track new category addition errors
-    val newCategoryAddedMessage: String? = null, // Track new category addition errors
-
-
-    val sku: String = "",
-    val taxes: String = "",
+    val newCategoryAddError: String? = null,
+    val newCategoryAddedMessage: String? = null,
     val showConfirmationModal: Boolean = false,
-    val dontShowConfirmationAgain: Boolean = false,
-    val listOfImageByteArrays: List<ByteArray?> = emptyList(),
-    // For updating an existing item
-    val itemId: Long? = null,
-    val shop_id: String ="",
-    val creator_id: String="",
-    val initialImageUrls: List<String> = emptyList()
+    val dontShowConfirmationAgain: Boolean = false
 )

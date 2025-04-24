@@ -3,11 +3,13 @@ package com.appdev.inventoryapp.core.di
 import com.appdev.inventoryapp.BuildConfig
 import com.appdev.inventoryapp.data.repository.AuditLogRepositoryImpl
 import com.appdev.inventoryapp.data.repository.InventoryRepositoryImpl
+import com.appdev.inventoryapp.data.repository.KeyRepositoryImpl
 import com.appdev.inventoryapp.data.repository.LoginRepositoryImpl
 import com.appdev.inventoryapp.data.repository.SignUpRepositoryImpl
 import com.appdev.inventoryapp.data.repository.UserRepositoryImpl
 import com.appdev.inventoryapp.domain.repository.AuditLogRepository
 import com.appdev.inventoryapp.domain.repository.InventoryRepository
+import com.appdev.inventoryapp.domain.repository.KeyRepository
 import com.appdev.inventoryapp.domain.repository.LoginRepository
 import com.appdev.inventoryapp.domain.repository.SignUpRepository
 import com.appdev.inventoryapp.domain.repository.UserRepository
@@ -37,6 +39,12 @@ object RepositoryModule {
     @Singleton
     fun provideInventoryRepository(supabaseClient: SupabaseClient): InventoryRepository {
         return InventoryRepositoryImpl(supabaseClient)
+    }
+
+    @Provides
+    @Singleton
+    fun provideKeyRepository(supabaseClient: SupabaseClient): KeyRepository {
+        return KeyRepositoryImpl(supabaseClient)
     }
 
 

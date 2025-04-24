@@ -43,7 +43,7 @@ class InventoryViewModel @Inject constructor(
                 _state.update { it.copy(isSortMenuExpanded = false) }
             }
             is InventoryEvent.FilterByCategory -> {
-                filterByCategory(event.category)
+                filterByCategory(event.categoryId)
                 _state.update { it.copy(isCategoryMenuExpanded = false) }
             }
             is InventoryEvent.FetchCategories -> fetchCategories()
@@ -94,9 +94,17 @@ class InventoryViewModel @Inject constructor(
                             }
 
                             is ResultState.Success -> {
+                                val idToName = result.data.associate { category ->
+                                    category.id to category.categoryName
+                                }
+                                val nameToId = result.data.associate { category ->
+                                    category.categoryName to category.id
+                                }
+
                                 _state.update {
                                     it.copy(
-                                        categories = result.data.map { category -> category.categoryName },
+                                        categoryIdToNameMap = idToName,
+                                        categoryNameToIdMap = nameToId,
                                         isLoading = false
                                     )
                                 }
@@ -129,10 +137,6 @@ class InventoryViewModel @Inject constructor(
         applyFilters()
     }
 
-    private fun filterByCategory(category: String?) {
-        _state.update { it.copy(selectedCategory = category) }
-        applyFilters()
-    }
 
     private fun loadInventory(shopId: String?) {
         viewModelScope.launch {
@@ -146,6 +150,7 @@ class InventoryViewModel @Inject constructor(
                         _state.update {
                             it.copy(
                                 inventoryItems = result.data,
+                                filteredItems = result.data,
                                 isLoading = false,
                                 errorMessage = null
                             )
@@ -216,10 +221,10 @@ class InventoryViewModel @Inject constructor(
             }
         }
 
-        // Apply category filter
-        if (currentState.selectedCategory != null) {
+        // Apply category filter - now using category_id
+        if (currentState.selectedCategoryId != -1L) {
             filteredItems = filteredItems.filter { item ->
-                item.category == currentState.selectedCategory
+                item.category_id == currentState.selectedCategoryId
             }
         }
 
@@ -234,6 +239,17 @@ class InventoryViewModel @Inject constructor(
         }
 
         _state.update { it.copy(filteredItems = filteredItems) }
+    }
+
+    private fun filterByCategory(categoryId: Long) {
+        // Get category name based on selected ID
+        val categoryName = if (categoryId == -1L) "All Categories" else _state.value.categoryIdToNameMap[categoryId]
+
+        _state.update { it.copy(
+            selectedCategoryId = categoryId,
+            selectedCategoryName = categoryName
+        ) }
+        applyFilters()
     }
 
 }

@@ -17,7 +17,7 @@ data class InventoryItem(
     @SerialName("imageUrls") var imageUrls: List<String> = emptyList(),
     @SerialName("shop_id") val shop_id: String,
     @SerialName("creator_id") val creator_id: String,
-    @SerialName("categoryName") val category: String = "",
+    @SerialName("category_id") val category_id: Long ,
     @SerialName("sku") val sku: String = "",
     @SerialName("taxes") val taxes: Double = 0.0,
     @SerialName("discount") val discountAmount: Float = 0.0f,

@@ -7,13 +7,16 @@ import com.appdev.inventoryapp.domain.model.UserEntity
 import kotlinx.coroutines.flow.Flow
 
 interface UserRepository {
+    fun getCurrentUserId(): String?
+    suspend fun getShopIdByUserId(userId: String): Flow<ResultState<String>>
+    suspend fun getUserById(userId: String): Flow<ResultState<UserEntity>>
     fun logout(): Flow<ResultState<Boolean>>
     suspend fun getUserPermissions(userId: String): Flow<ResultState<UserEntity>>
     suspend fun getAllUsers(shopId: String, userId: String): Flow<ResultState<List<UserEntity>>>
     suspend fun createUser(
         userEntity: UserEntity,
     ): Flow<ResultState<String>>
-
+    suspend fun updatePassword(email: String,currentPassword: String, newPassword: String): Flow<ResultState<Unit>>
     suspend fun updateUser(user: UserEntity): Flow<ResultState<String>>
     suspend fun deleteUser(user: String): Flow<ResultState<Boolean>>
     suspend fun activateUser(userId: String): Flow<ResultState<Boolean>>
@@ -27,4 +30,5 @@ interface UserRepository {
     suspend fun updateShopName(userId: String, shopName: String): Flow<ResultState<Boolean>>
     suspend fun updateUserName(userId: String, userName: String): Flow<ResultState<Boolean>>
     suspend fun checkShopNameExists(shopName: String): Flow<ResultState<Boolean>>
+    suspend fun checkUsernameExists(username: String): Flow<ResultState<Boolean>>
 }

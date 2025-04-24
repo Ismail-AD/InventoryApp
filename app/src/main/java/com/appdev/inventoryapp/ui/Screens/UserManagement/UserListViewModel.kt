@@ -11,6 +11,7 @@ import com.appdev.inventoryapp.Utils.UserRole
 import com.appdev.inventoryapp.domain.model.AuditLogEntry
 import com.appdev.inventoryapp.domain.model.UserEntity
 import com.appdev.inventoryapp.domain.repository.AuditLogRepository
+import com.appdev.inventoryapp.domain.repository.KeyRepository
 import com.appdev.inventoryapp.domain.repository.UserRepository
 import com.aventrix.jnanoid.jnanoid.NanoIdUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -28,6 +29,7 @@ import javax.inject.Inject
 @HiltViewModel
 class UsersListViewModel @Inject constructor(
     private val userRepository: UserRepository,
+    private val keyRepository: KeyRepository,
     private val auditLogRepository: AuditLogRepository,
     val sessionManagement: SessionManagement
 ) : ViewModel() {
@@ -46,13 +48,16 @@ class UsersListViewModel @Inject constructor(
     fun getUserRole(): String {
         return sessionManagement.getUserRole() ?: "View Only"
     }
+
     fun canManageUsers(): Boolean {
         return state.value.userPermissions.contains(Permission.MANAGE_USERS.name)
     }
+
     private fun loadUserPermissions() {
         viewModelScope.launch {
-            sessionManagement.getUserId()?.let { myId ->
-                userRepository.getUserPermissions(myId).collect { result ->
+            val myId = userRepository.getCurrentUserId() ?: sessionManagement.getUserId()
+            if (myId != null) {
+                userRepository.getUserById(myId).collect { result ->
                     when (result) {
                         is ResultState.Loading -> {
                             _state.update { it.copy(isLoading = true) }
@@ -135,6 +140,80 @@ class UsersListViewModel @Inject constructor(
         return dateFormat.format(Date(timestamp))
     }
 
+    private fun validatePassword(password: String): String? {
+        if (password.length < 6) {
+            return "Password must be at least 6 characters long"
+        }
+        return null // Password is valid
+    }
+
+    // Function to create user and then store the password securely
+    private fun createUserAndStorePassword(newUser: UserEntity, password: String) {
+        viewModelScope.launch {
+            // First create the user
+            userRepository.createUser(newUser).collect { createResult ->
+                when (createResult) {
+                    is ResultState.Success -> {
+                        // Now store the password in the keys table
+                        keyRepository.storePassword(newUser.id, password)
+                            .collect { passwordResult ->
+                                when (passwordResult) {
+                                    is ResultState.Success -> {
+                                        // Create audit log entry for new user creation
+                                        val details = listOf(
+                                            "Role: ${newUser.role}",
+                                            "Permissions: ${newUser.permissions?.joinToString(", ") ?: "none"}"
+                                        )
+
+                                        createAuditLog(
+                                            AuditActionType.USER_CREATED,
+                                            newUser,
+                                            details
+                                        )
+
+                                        _state.update {
+                                            it.copy(
+                                                showAddUserDialog = false,
+                                                isAddUserButtonLoading = false,
+                                                password = "" // Clear password after successful creation
+                                            )
+                                        }
+                                        handleEvent(UsersListEvent.RefreshUsers)
+                                    }
+
+                                    is ResultState.Failure -> {
+                                        _state.update {
+                                            it.copy(
+                                                error = "User created but failed to store password: ${passwordResult.message.localizedMessage}",
+                                                isAddUserButtonLoading = false
+                                            )
+                                        }
+                                    }
+
+                                    is ResultState.Loading -> {
+                                        // Already in loading state
+                                    }
+                                }
+                            }
+                    }
+
+                    is ResultState.Failure -> {
+                        _state.update {
+                            it.copy(
+                                error = createResult.message.localizedMessage,
+                                isAddUserButtonLoading = false
+                            )
+                        }
+                    }
+
+                    is ResultState.Loading -> {
+                        // Already in loading state
+                    }
+                }
+            }
+        }
+    }
+
     fun handleEvent(event: UsersListEvent) {
 //        if (!canManageUsers()) {
 //            return
@@ -142,6 +221,151 @@ class UsersListViewModel @Inject constructor(
 
         viewModelScope.launch {
             when (event) {
+
+                // Add password-related events
+                is UsersListEvent.UpdatePassword -> {
+                    // Validate password complexity
+                    val passwordError = validatePassword(event.password)
+                    _state.update {
+                        it.copy(
+                            password = event.password,
+                            passwordError = passwordError
+                        )
+                    }
+                }
+
+                is UsersListEvent.TogglePasswordVisibility -> {
+                    _state.update { it.copy(showPassword = !it.showPassword) }
+                }
+
+                // Update AddUser event to handle passwords
+                is UsersListEvent.AddUser -> {
+                    _state.update {
+                        it.copy(
+                            emailError = null,
+                            usernameError = null,
+                            passwordError = null,
+                            isAddUserButtonLoading = true
+                        )
+                    }
+
+                    // Validate password
+                    val passwordError = validatePassword(event.password)
+                    if (passwordError != null) {
+                        _state.update {
+                            it.copy(
+                                passwordError = passwordError,
+                                isAddUserButtonLoading = false
+                            )
+                        }
+                        return@launch
+                    }
+
+                    // Check if username exists
+                    val usernameResult = checkUsernameExists(event.username)
+                    if (usernameResult is ResultState.Success && usernameResult.data) {
+                        _state.update {
+                            it.copy(
+                                usernameError = "Username already exists. Please choose a different username.",
+                                isAddUserButtonLoading = false
+                            )
+                        }
+                        return@launch
+                    }
+
+                    // Username doesn't exist, now check email
+                    val emailResult = checkEmailExists(event.email)
+                    if (emailResult is ResultState.Success && emailResult.data) {
+                        _state.update {
+                            it.copy(
+                                emailError = "Email already exists. Please use a different email address.",
+                                isAddUserButtonLoading = false
+                            )
+                        }
+                        return@launch
+                    }
+
+                    // Both username and email are unique, proceed with user creation
+                    val shopId = sessionManagement.getShopId()
+                    val shopName = sessionManagement.getShopName()
+
+                    if (shopId != null && shopName != null) {
+                        // Generate userId first
+                        val userId = NanoIdUtils.randomNanoId()
+
+                        val newUser = UserEntity(
+                            id = userId,
+                            shop_id = shopId,
+                            username = event.username,
+                            shopName = shopName,
+                            email = event.email.trim().lowercase(),
+                            role = event.role,
+                            permissions = event.permissions.map { it.name },
+                            isActive = true
+                        )
+
+                        // Create user first, then store password
+                        createUserAndStorePassword(newUser, event.password)
+                    } else {
+                        _state.update {
+                            it.copy(
+                                error = "Shop information is missing",
+                                isAddUserButtonLoading = false
+                            )
+                        }
+                    }
+                }
+
+                // Also update DeleteUser to delete the password
+                is UsersListEvent.DeleteUser -> {
+                    // Find the user in the state to include in audit log
+                    val userToDelete = _state.value.userToDelete
+
+                    _state.update { it.copy(isDeleteLoading = true) }
+
+                    // Delete the user
+                    userRepository.deleteUser(event.userId).collect { result ->
+                        when (result) {
+                            is ResultState.Success -> {
+                                // Also delete the password from keys table
+                                keyRepository.deletePassword(event.userId).collect { _ ->
+                                    // We don't need to handle this result specifically,
+                                    // just continue with the flow
+                                }
+
+                                // Create audit log entry for deletion
+                                userToDelete?.let {
+                                    createAuditLog(
+                                        AuditActionType.USER_DELETED,
+                                        it
+                                    )
+                                }
+
+                                _state.update {
+                                    it.copy(
+                                        isDeleteLoading = false,
+                                        showDeleteConfirmation = false,
+                                        userToDelete = null
+                                    )
+                                }
+                                handleEvent(UsersListEvent.RefreshUsers)
+                            }
+
+                            is ResultState.Failure -> {
+                                _state.update {
+                                    it.copy(
+                                        error = result.message.localizedMessage,
+                                        isDeleteLoading = false
+                                    )
+                                }
+                            }
+
+                            is ResultState.Loading -> {
+                                // Loading state is already set above
+                            }
+                        }
+                    }
+                }
 
                 is UsersListEvent.ShowLogsDialog -> {
                     _state.update { it.copy(showLogsDialog = true) }
@@ -221,8 +445,25 @@ class UsersListViewModel @Inject constructor(
                     val userToEdit = currentState.userToEdit
 
                     if (userToEdit != null) {
-                        _state.update { it.copy(isUpdateUserLoading = true) }
+                        _state.update { it.copy(
+                            isUpdateUserLoading = true,
+                            usernameError = null,
+                            emailError = null
+                        ) }
 
+                        // Check if username exists (except for current user)
+                        val usernameResult = checkUsernameExists(currentState.editUsername, userToEdit.id)
+                        if (usernameResult is ResultState.Success && usernameResult.data) {
+                            _state.update {
+                                it.copy(
+                                    usernameError = "Username already exists. Please choose a different username.",
+                                    isUpdateUserLoading = false
+                                )
+                            }
+                            return@launch
+                        }
+
+                        // Username check passed, proceed with update
                         val updatedUser = userToEdit.copy(
                             username = currentState.editUsername,
                             role = currentState.editRole ?: userToEdit.role,
@@ -256,45 +497,10 @@ class UsersListViewModel @Inject constructor(
                             }
                         }
 
-                        userRepository.updateUser(updatedUser).collect { result ->
-                            when (result) {
-                                is ResultState.Success -> {
-                                    _state.update {
-                                        it.copy(
-                                            isUpdateUserLoading = false,
-                                            showEditUserDialog = false,
-                                            userToEdit = null
-                                        )
-                                    }
-
-                                    // Create a single comprehensive audit log with all changes
-                                    if (changeDetails.isNotEmpty()) {
-                                        createAuditLog(
-                                            AuditActionType.USER_UPDATED,
-                                            updatedUser,
-                                            changeDetails
-                                        )
-                                    }
-
-                                    handleEvent(UsersListEvent.RefreshUsers)
-                                }
-
-                                is ResultState.Failure -> {
-                                    _state.update {
-                                        it.copy(
-                                            error = result.message.localizedMessage,
-                                            isUpdateUserLoading = false
-                                        )
-                                    }
-                                }
-
-                                is ResultState.Loading -> {
-                                    // Already in loading state
-                                }
-                            }
-                        }
+                        updateUserAndCreateAuditLog(updatedUser, changeDetails)
                     }
                 }
+
 
                 is UsersListEvent.ActivateUser -> {
                     // Find the user in the state to include in audit log
@@ -352,142 +558,110 @@ class UsersListViewModel @Inject constructor(
                     }
                 }
 
-                is UsersListEvent.DeleteUser -> {
-                    // Find the user in the state to include in audit log
-                    val userToDelete = _state.value.userToDelete
-
-                    _state.update { it.copy(isDeleteLoading = true) }
-                    userRepository.deleteUser(event.userId).collect { result ->
-                        when (result) {
-                            is ResultState.Success -> {
-                                // Create audit log entry for deletion
-                                userToDelete?.let {
-                                    createAuditLog(
-                                        AuditActionType.USER_DELETED,
-                                        it
-                                    )
-                                }
-
-                                _state.update {
-                                    it.copy(
-                                        isDeleteLoading = false,
-                                        showDeleteConfirmation = false,
-                                        userToDelete = null
-                                    )
-                                }
-                                handleEvent(UsersListEvent.RefreshUsers)
-                            }
-
-                            is ResultState.Failure -> {
-                                _state.update {
-                                    it.copy(
-                                        error = result.message.localizedMessage,
-                                        isDeleteLoading = false
-                                    )
-                                }
-                            }
-
-                            is ResultState.Loading -> {
-                                // Loading state is already set above
-                            }
-                        }
-                    }
-                }
-
-                is UsersListEvent.AddUser -> {
-                    _state.update { it.copy(emailError = null, isAddUserButtonLoading = true) }
-
-                    // Check if email exists in the database
-                    userRepository.checkEmailExists(event.email).collect { result ->
-                        when (result) {
-                            is ResultState.Success -> {
-                                if (result.data) {
-                                    // Email already exists
-                                    _state.update {
-                                        it.copy(
-                                            emailError = "Email already exists. Please use a different email address.",
-                                            isAddUserButtonLoading = false
-                                        )
-                                    }
-                                } else {
-                                    // Email doesn't exist, proceed with user creation
-                                    sessionManagement.getShopId()?.let { shopId ->
-                                        sessionManagement.getShopName()?.let { shopName ->
-                                            val newUser = UserEntity(
-                                                shop_id = shopId,
-                                                username = event.username,
-                                                shopName = shopName,
-                                                email = event.email.trim().lowercase(),
-                                                role = event.role,
-                                                permissions = event.permissions.map { it.name },
-                                                isActive = true,
-                                                id = NanoIdUtils.randomNanoId()
-                                            )
-
-                                            // Call repository method to create user
-                                            userRepository.createUser(newUser)
-                                                .collect { createResult ->
-                                                    when (createResult) {
-                                                        is ResultState.Success -> {
-                                                            // Create audit log entry for new user creation
-                                                            val details = listOf(
-                                                                "Role: ${newUser.role}",
-                                                                "Permissions: ${
-                                                                    newUser.permissions?.joinToString(
-                                                                        ", "
-                                                                    ) ?: "none"
-                                                                }"
-                                                            )
-
-                                                            createAuditLog(
-                                                                AuditActionType.USER_CREATED,
-                                                                newUser,
-                                                                details
-                                                            )
-
-                                                            _state.update {
-                                                                it.copy(
-                                                                    showAddUserDialog = false,
-                                                                    isAddUserButtonLoading = false
-                                                                )
-                                                            }
-                                                            handleEvent(UsersListEvent.RefreshUsers)
-                                                        }
-
-                                                        is ResultState.Failure -> {
-                                                            _state.update {
-                                                                it.copy(
-                                                                    error = createResult.message.localizedMessage,
-                                                                    isAddUserButtonLoading = false
-                                                                )
-                                                            }
-                                                        }
-
-                                                        is ResultState.Loading -> {
-                                                            // Already in loading state
-                                                        }
-                                                    }
-                                                }
-                                        }
-                                    }
-                                }
-                            }
-
-                            is ResultState.Failure -> {
-                                _state.update {
-                                    it.copy(
-                                        error = result.message.localizedMessage,
-                                        isAddUserButtonLoading = false
-                                    )
-                                }
-                            }
-
-                            is ResultState.Loading -> {
-                                // Already in loading state
-                            }
-                        }
-                    }
-                }
+//                is UsersListEvent.DeleteUser -> {
+//                    // Find the user in the state to include in audit log
+//                    val userToDelete = _state.value.userToDelete
+//
+//                    _state.update { it.copy(isDeleteLoading = true) }
+//                    userRepository.deleteUser(event.userId).collect { result ->
+//                        when (result) {
+//                            is ResultState.Success -> {
+//                                // Create audit log entry for deletion
+//                                userToDelete?.let {
+//                                    createAuditLog(
+//                                        AuditActionType.USER_DELETED,
+//                                        it
+//                                    )
+//                                }
+//
+//                                _state.update {
+//                                    it.copy(
+//                                        isDeleteLoading = false,
+//                                        showDeleteConfirmation = false,
+//                                        userToDelete = null
+//                                    )
+//                                }
+//                                handleEvent(UsersListEvent.RefreshUsers)
+//                            }
+//
+//                            is ResultState.Failure -> {
+//                                _state.update {
+//                                    it.copy(
+//                                        error = result.message.localizedMessage,
+//                                        isDeleteLoading = false
+//                                    )
+//                                }
+//                            }
+//
+//                            is ResultState.Loading -> {
+//                                // Loading state is already set above
+//                            }
+//                        }
+//                    }
+//                }
+//
+//
+//
+//                // Now let's also refactor the AddUser event handler to use these functions
+//                is UsersListEvent.AddUser -> {
+//                    _state.update {
+//                        it.copy(
+//                            emailError = null,
+//                            usernameError = null,
+//                            isAddUserButtonLoading = true
+//                        )
+//                    }
+//
+//                    // Check if username exists
+//                    val usernameResult = checkUsernameExists(event.username)
+//                    if (usernameResult is ResultState.Success && usernameResult.data) {
+//                        _state.update {
+//                            it.copy(
+//                                usernameError = "Username already exists. Please choose a different username.",
+//                                isAddUserButtonLoading = false
+//                            )
+//                        }
+//                        return@launch
+//                    }
+//
+//                    // Username doesn't exist, now check email
+//                    val emailResult = checkEmailExists(event.email)
+//                    if (emailResult is ResultState.Success && emailResult.data) {
+//                        _state.update {
+//                            it.copy(
+//                                emailError = "Email already exists. Please use a different email address.",
+//                                isAddUserButtonLoading = false
+//                            )
+//                        }
+//                        return@launch
+//                    }
+//
+//                    // Both username and email are unique, proceed with user creation
+//                    val shopId = sessionManagement.getShopId()
+//                    val shopName = sessionManagement.getShopName()
+//
+//                    if (shopId != null && shopName != null) {
+//                        val newUser = UserEntity(
+//                            shop_id = shopId,
+//                            username = event.username,
+//                            shopName = shopName,
+//                            email = event.email.trim().lowercase(),
+//                            role = event.role,
+//                            permissions = event.permissions.map { it.name },
+//                            isActive = true,
+//                            id = NanoIdUtils.randomNanoId()
+//                        )
+//
+//                        createUserAndAuditLog(newUser)
+//                    } else {
+//                        _state.update {
+//                            it.copy(
+//                                error = "Shop information is missing",
+//                                isAddUserButtonLoading = false
+//                            )
+//                        }
+//                    }
+//                }
 
                 // Audit log related events
                 is UsersListEvent.ShowUserAuditLog -> {
@@ -687,7 +861,156 @@ class UsersListViewModel @Inject constructor(
             }
         }
     }
+    private fun createUserAndAuditLog(newUser: UserEntity) {
+        viewModelScope.launch {
+            userRepository.createUser(newUser).collect { createResult ->
+                when (createResult) {
+                    is ResultState.Success -> {
+                        // Create audit log entry for new user creation
+                        val details = listOf(
+                            "Role: ${newUser.role}",
+                            "Permissions: ${newUser.permissions?.joinToString(", ") ?: "none"}"
+                        )
 
+                        createAuditLog(
+                            AuditActionType.USER_CREATED,
+                            newUser,
+                            details
+                        )
+
+                        _state.update {
+                            it.copy(
+                                showAddUserDialog = false,
+                                isAddUserButtonLoading = false
+                            )
+                        }
+                        handleEvent(UsersListEvent.RefreshUsers)
+                    }
+
+                    is ResultState.Failure -> {
+                        _state.update {
+                            it.copy(
+                                error = createResult.message.localizedMessage,
+                                isAddUserButtonLoading = false
+                            )
+                        }
+                    }
+
+                    is ResultState.Loading -> {
+                        // Already in loading state
+                    }
+                }
+            }
+        }
+    }
+    private fun updateUserAndCreateAuditLog(updatedUser: UserEntity, changeDetails: List<String>) {
+        viewModelScope.launch {
+            userRepository.updateUser(updatedUser).collect { result ->
+                when (result) {
+                    is ResultState.Success -> {
+                        _state.update {
+                            it.copy(
+                                isUpdateUserLoading = false,
+                                showEditUserDialog = false,
+                                userToEdit = null
+                            )
+                        }
+
+                        // Create a single comprehensive audit log with all changes
+                        if (changeDetails.isNotEmpty()) {
+                            createAuditLog(
+                                AuditActionType.USER_UPDATED,
+                                updatedUser,
+                                changeDetails
+                            )
+                        }
+
+                        handleEvent(UsersListEvent.RefreshUsers)
+                    }
+
+                    is ResultState.Failure -> {
+                        _state.update {
+                            it.copy(
+                                error = result.message.localizedMessage,
+                                isUpdateUserLoading = false
+                            )
+                        }
+                    }
+
+                    is ResultState.Loading -> {
+                        // Already in loading state
+                    }
+                }
+            }
+        }
+    }
+
+
+    // First, let's create a separate function for checking username and email existence
+
+    private suspend fun checkUsernameExists(username: String, userId: String? = null): ResultState<Boolean> {
+        return try {
+            var exists = false
+            userRepository.checkUsernameExists(username).collect { result ->
+                when (result) {
+                    is ResultState.Success -> {
+                        // If we're updating a user, the username is allowed to be the same as the current user's
+                        if (userId != null) {
+                            // Get the current user with this ID to compare usernames
+                            var currentUsername = ""
+                            userRepository.getUserById(userId).collect { userResult ->
+                                if (userResult is ResultState.Success) {
+                                    currentUsername = userResult.data.username
+                                }
+                            }
+                            // Username exists but it's the current user's username, so it's okay
+                            exists = result.data && username != currentUsername
+                        } else {
+                            // For new users, any existing username is a conflict
+                            exists = result.data
+                        }
+                    }
+                    is ResultState.Failure -> throw result.message
+                    else -> {}
+                }
+            }
+            ResultState.Success(exists)
+        } catch (e: Exception) {
+            ResultState.Failure(e)
+        }
+    }
+
+    private suspend fun checkEmailExists(email: String, userId: String? = null): ResultState<Boolean> {
+        return try {
+            var exists = false
+            userRepository.checkEmailExists(email).collect { result ->
+                when (result) {
+                    is ResultState.Success -> {
+                        // If we're updating a user, the email is allowed to be the same as the current user's
+                        if (userId != null) {
+                            // Get the current user with this ID to compare emails
+                            var currentEmail = ""
+                            userRepository.getUserById(userId).collect { userResult ->
+                                if (userResult is ResultState.Success) {
+                                    currentEmail = userResult.data.email
+                                }
+                            }
+                            // Email exists but it's the current user's email, so it's okay
+                            exists = result.data && email.lowercase() != currentEmail.lowercase()
+                        } else {
+                            // For new users, any existing email is a conflict
+                            exists = result.data
+                        }
+                    }
+                    is ResultState.Failure -> throw result.message
+                    else -> {}
+                }
+            }
+            ResultState.Success(exists)
+        } catch (e: Exception) {
+            ResultState.Failure(e)
+        }
+    }
 
 
     private fun checkDuplicateEmail(email: String): Boolean {

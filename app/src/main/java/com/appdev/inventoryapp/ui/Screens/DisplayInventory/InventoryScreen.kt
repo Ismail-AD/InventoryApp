@@ -39,7 +39,7 @@ import kotlin.math.absoluteValue
 fun InventoryScreen(
     viewModel: InventoryViewModel = hiltViewModel(),
     navigateToAddItem: () -> Unit,
-    navigateToItemDetail: (InventoryItem) -> Unit,
+    navigateToItemDetail: (InventoryItem,String) -> Unit,
     navigateToUpdateItem: (InventoryItem) -> Unit,
 ) {
 
@@ -64,7 +64,7 @@ fun InventoryScreenContent(
     state: InventoryState,
     onEvent: (InventoryEvent) -> Unit,
     navigateToAddItem: () -> Unit,
-    navigateToItemDetail: (InventoryItem) -> Unit,
+    navigateToItemDetail: (InventoryItem,String) -> Unit,
     navigateToUpdateItem: (InventoryItem) -> Unit,
 ) {
     val context = LocalContext.current
@@ -143,10 +143,10 @@ fun InventoryScreenContent(
                             )
 
                             // Category dropdown with fixed layout
-                            if (state.categories.isNotEmpty()) {
+                            if (state.categoryIdToNameMap.isNotEmpty()) {
                                 CategoryDropdown(
-                                    selectedCategory = state.selectedCategory,
-                                    categories = state.categories,
+                                    selectedCategoryName = state.selectedCategoryName,
+                                    categoryIdToNameMap = state.categoryIdToNameMap,
                                     isExpanded = state.isCategoryMenuExpanded,
                                     onExpandChange = {
                                         onEvent(InventoryEvent.ToggleCategoryMenu(it))
@@ -163,7 +163,7 @@ fun InventoryScreenContent(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         // Display no matches message or item list based on filtered items
-                        if (state.filteredItems.isEmpty() && (state.searchQuery.isNotEmpty() || state.selectedCategory != null)) {
+                        if (state.filteredItems.isEmpty()) {
                             // Simple "No matches found" message
                             Box(
                                 modifier = Modifier
@@ -205,7 +205,10 @@ fun InventoryScreenContent(
                             InventoryItemsList(
                                 context = context,
                                 items = state.filteredItems,
-                                onItemClick = { navigateToItemDetail(it) },
+                                onItemClick = { item->
+                                    val categoryName = state.categoryIdToNameMap[item.category_id] ?: ""
+                                    navigateToItemDetail(item,categoryName)
+                                },
                                 onUpdate = { navigateToUpdateItem(it) },
                                 onDelete = { onEvent(InventoryEvent.ShowDeleteConfirmation(it)) }
                             )
@@ -586,11 +589,11 @@ fun SortDropdown(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CategoryDropdown(
-    selectedCategory: String?,
-    categories: List<String>,
+    selectedCategoryName: String?,
+    categoryIdToNameMap: Map<Long, String>,
     isExpanded: Boolean,
     onExpandChange: (Boolean) -> Unit,
-    onCategorySelected: (String?) -> Unit,
+    onCategorySelected: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier) {
@@ -599,7 +602,7 @@ fun CategoryDropdown(
             onExpandedChange = { onExpandChange(it) }
         ) {
             OutlinedTextField(
-                value = selectedCategory ?: "All Categories",
+                value = selectedCategoryName ?: "All Categories",
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("Category") },
@@ -627,17 +630,17 @@ fun CategoryDropdown(
                 DropdownMenuItem(
                     text = { Text("All Categories") },
                     onClick = {
-                        onCategorySelected(null)
+                        onCategorySelected(-1L)
                         onExpandChange(false)
                     }
                 )
 
                 // Dynamically add category options
-                categories.forEach { category ->
+                categoryIdToNameMap.forEach { (categoryId, categoryName) ->
                     DropdownMenuItem(
-                        text = { Text(category) },
+                        text = { Text(categoryName) },
                         onClick = {
-                            onCategorySelected(category)
+                            onCategorySelected(categoryId)
                             onExpandChange(false)
                         }
                     )

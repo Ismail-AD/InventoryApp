@@ -1,6 +1,7 @@
 package com.appdev.inventoryapp.ui.Screens.DisplayInventory
 
 import com.appdev.inventoryapp.Utils.SortOrder
+import com.appdev.inventoryapp.domain.model.Category
 import com.appdev.inventoryapp.domain.model.InventoryItem
 
 data class InventoryState(
@@ -10,7 +11,13 @@ data class InventoryState(
     val errorMessage: String? = null,
     val searchQuery: String = "",
     val selectedCategory: String? = null,
-    val categories: List<String> = emptyList(),
+    // Update to store categoryId -> categoryName mapping
+    val categoryIdToNameMap: Map<Long, String> = emptyMap(),
+    val categoryNameToIdMap: Map<String, Long> = emptyMap(),
+
+    // Store both name and ID for selected category
+    val selectedCategoryId: Long? = -1L,
+    val selectedCategoryName: String? = null,
     val currentSortOrder: SortOrder = SortOrder.NEWEST_FIRST,
     val isSortMenuExpanded: Boolean = false,
     val isCategoryMenuExpanded: Boolean = false,

@@ -23,5 +23,9 @@ data class SettingsState(
     val showNotificationGuide: Boolean = false,
     val showLogoutConfirmDialog: Boolean = false,
     val isLogoutConfirmed: Boolean = false,
-
+    val isEditingPassword: Boolean = false,
+    val currentPassword: String = "",
+    val newPassword: String = "",
+    val confirmPassword: String = "",
+    val passwordError: String? = null
 )

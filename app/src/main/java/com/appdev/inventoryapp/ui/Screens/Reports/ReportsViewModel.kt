@@ -79,12 +79,15 @@ class ReportViewModel @Inject constructor(
             is ReportEvent.LoadReports -> {
                 sessionManagement.getShopId()?.let { loadBaseData(it) }
             }
+
             is ReportEvent.DismissError -> {
                 _state.update { it.copy(errorMessage = null) }
             }
+
             is ReportEvent.ShowDateRangePicker -> {
                 _state.update { it.copy(isDateRangePickerVisible = true) }
             }
+
             is ReportEvent.HideDateRangePicker -> {
                 _state.update { it.copy(isDateRangePickerVisible = false) }
             }
@@ -94,18 +97,22 @@ class ReportViewModel @Inject constructor(
             }
 
             is ReportEvent.FilterByCategory -> {
-                _state.update { it.copy(
-                    selectedCategory = event.category,
-                    isCategoryFilterExpanded = false // Close the dropdown
-                ) }
+                _state.update {
+                    it.copy(
+                        selectedCategory = event.category,
+                        isCategoryFilterExpanded = false // Close the dropdown
+                    )
+                }
                 applyFiltersAndUpdateReports()
             }
 
             is ReportEvent.FilterBySalesperson -> {
-                _state.update { it.copy(
-                    selectedSalesperson = event.salesperson,
-                    isSalespersonFilterExpanded = false // Close the dropdown
-                ) }
+                _state.update {
+                    it.copy(
+                        selectedSalesperson = event.salesperson,
+                        isSalespersonFilterExpanded = false // Close the dropdown
+                    )
+                }
                 applyFiltersAndUpdateReports()
             }
 
@@ -125,6 +132,7 @@ class ReportViewModel @Inject constructor(
             is ReportEvent.ToggleSalespersonFilterMenu -> {
                 _state.update { it.copy(isSalespersonFilterExpanded = !it.isSalespersonFilterExpanded) }
             }
+
             is ReportEvent.ResetFilters -> {
                 _state.update {
                     it.copy(
@@ -138,6 +146,7 @@ class ReportViewModel @Inject constructor(
             }
         }
     }
+
     private fun fetchUsers(shopId: String) {
         val userId = sessionManagement.getUserId()
         if (userId != null) {
@@ -146,7 +155,7 @@ class ReportViewModel @Inject constructor(
                     when (result) {
                         is ResultState.Success -> {
                             val users = result.data
-                            val salesPersonList = users.map { person->person.username }
+                            val salesPersonList = users.map { person -> person.username }
                             _state.update {
                                 it.copy(
                                     salespeople = salesPersonList
@@ -154,6 +163,7 @@ class ReportViewModel @Inject constructor(
                             }
                             loadAllSalesRecords(shopId)
                         }
+
                         is ResultState.Failure -> {
                             _state.update {
                                 it.copy(
@@ -162,6 +172,7 @@ class ReportViewModel @Inject constructor(
                                 )
                             }
                         }
+
                         else -> {}
                     }
                 }
@@ -179,14 +190,27 @@ class ReportViewModel @Inject constructor(
                         is ResultState.Loading -> {
                             _state.update { it.copy(isLoading = true) }
                         }
+
                         is ResultState.Success -> {
+                            val categories = result.data.map { category -> category.categoryName }
+                            val idToName = result.data.associate { category ->
+                                category.id to category.categoryName
+                            }
+                            val nameToId = result.data.associate { category ->
+                                category.categoryName to category.id
+                            }
+
                             _state.update {
                                 it.copy(
-                                    categories = result.data.map { category -> category.categoryName },
+                                    categories = categories,
+                                    categoryIdToNameMap = idToName,
+                                    categoryNameToIdMap = nameToId,
+                                    isLoading = false
                                 )
                             }
                             fetchUsers(shopId)
                         }
+
                         is ResultState.Failure -> {
                             _state.update {
                                 it.copy(
@@ -196,6 +220,7 @@ class ReportViewModel @Inject constructor(
                                 )
                             }
                         }
+
                         else -> {}
                     }
                 }
@@ -226,6 +251,7 @@ class ReportViewModel @Inject constructor(
                         fetchCategories()
 
                     }
+
                     is ResultState.Failure -> {
                         _state.update {
                             it.copy(
@@ -234,6 +260,7 @@ class ReportViewModel @Inject constructor(
                             )
                         }
                     }
+
                     is ResultState.Loading -> {
                         // Already handled
                     }
@@ -252,17 +279,21 @@ class ReportViewModel @Inject constructor(
                     is ResultState.Success -> {
                         val allSalesRecords = result.data
 
-                        // Update sales records in state
+                        // Filter to only include "Completed" status sales records
+                        val completedSalesRecords = allSalesRecords.filter { it.status == "Completed" }
+
+                        // Update sales records in state with only completed records
                         _state.update { currentState ->
                             currentState.copy(
-                                salesRecords = allSalesRecords,
-                                salespeople = allSalesRecords.map { it.creator_name }.distinct()
+                                salesRecords = completedSalesRecords,
+                                salespeople = completedSalesRecords.map { it.creator_name }.distinct()
                             )
                         }
 
                         // Apply filters to the loaded data
                         applyFiltersAndUpdateReports()
                     }
+
                     is ResultState.Failure -> {
                         _state.update {
                             it.copy(
@@ -271,6 +302,7 @@ class ReportViewModel @Inject constructor(
                             )
                         }
                     }
+
                     is ResultState.Loading -> {
                         // Already handled
                     }
@@ -282,6 +314,7 @@ class ReportViewModel @Inject constructor(
     /**
      * Applies all current filters to sales records and updates reports
      */
+    // Modify this function in ReportViewModel.kt to handle categories by ID rather than name
     private fun applyFiltersAndUpdateReports() {
         val currentState = _state.value
 
@@ -307,23 +340,26 @@ class ReportViewModel @Inject constructor(
             timestamp in startEpochMilli..endEpochMilli
         }
 
-        // Apply category filter if selected
         if (currentState.selectedCategory != null) {
-            filteredRecords = filteredRecords.filter { record ->
-                record.salesRecordItem.any { item ->
-                    item.category == currentState.selectedCategory
+            val selectedCategoryId = currentState.categoryNameToIdMap[currentState.selectedCategory]
+
+            if (selectedCategoryId != null) {
+                filteredRecords = filteredRecords.filter { record ->
+                    record.salesRecordItem.any { item ->
+                        val productCategoryId =
+                            state.value.inventoryItems.find { items -> items.id == item.productId }?.category_id
+                        productCategoryId == selectedCategoryId
+                    }
                 }
             }
         }
 
-        // Apply salesperson filter if selected
         if (currentState.selectedSalesperson != null) {
             filteredRecords = filteredRecords.filter { record ->
                 record.creator_name == currentState.selectedSalesperson
             }
         }
 
-        // Update filtered records in state
         _state.update {
             it.copy(
                 filteredSalesRecords = filteredRecords,
@@ -331,17 +367,19 @@ class ReportViewModel @Inject constructor(
             )
         }
 
-        // Process the filtered data to update reports
         processSalesData(filteredRecords, currentState.inventoryItems)
     }
 
-    private fun processSalesData(salesRecords: List<SalesRecord>, inventoryItems: List<InventoryItem>) {
-        // Calculate total revenue
+    private fun processSalesData(
+        salesRecords: List<SalesRecord>,
+        inventoryItems: List<InventoryItem>
+    ) {
         val totalRevenue = salesRecords.flatMap { it.salesRecordItem }
             .sumOf { saleItem ->
                 val price = saleItem.selling_price
                 val quantity = saleItem.quantity
-                val discount = calculateDiscount(price, saleItem.discountAmount, saleItem.isPercentageDiscount)
+                val discount =
+                    calculateDiscount(price, saleItem.discountAmount, saleItem.isPercentageDiscount)
                 (price - discount) * quantity
             }
 
@@ -349,8 +387,13 @@ class ReportViewModel @Inject constructor(
         val totalProfit = salesRecords.flatMap { it.salesRecordItem }
             .sumOf { saleItem ->
                 val sellingPrice = saleItem.selling_price
-                val discount = calculateDiscount(sellingPrice, saleItem.discountAmount, saleItem.isPercentageDiscount)
-                val costPrice = inventoryItems.find { it.id == saleItem.productId }?.cost_price ?: 0.0
+                val discount = calculateDiscount(
+                    sellingPrice,
+                    saleItem.discountAmount,
+                    saleItem.isPercentageDiscount
+                )
+                val costPrice =
+                    inventoryItems.find { it.id == saleItem.productId }?.cost_price ?: 0.0
                 val itemProfit = (sellingPrice - discount - costPrice) * saleItem.quantity
                 maxOf(itemProfit, 0.0) // Ensure profit is never negative
             }
@@ -358,13 +401,21 @@ class ReportViewModel @Inject constructor(
         // Count number of sales transactions
         val numberOfSales = salesRecords.size
 
-        // Create category breakdown
+        // Create category breakdown - MODIFIED to use category ID
         val categoryBreakdown = salesRecords.flatMap { it.salesRecordItem }
-            .groupBy { it.category }
+            .groupBy { item ->
+                val categoryId = state.value.inventoryItems.find { items -> items.id == item.productId }?.category_id
+                // Get category name from ID using the map
+                categoryId?.let { state.value.categoryIdToNameMap[it] } ?: "Uncategorized"
+            }
             .mapValues { (_, items) ->
                 items.sumOf { saleItem ->
                     val price = saleItem.selling_price
-                    val discount = calculateDiscount(price, saleItem.discountAmount, saleItem.isPercentageDiscount)
+                    val discount = calculateDiscount(
+                        price,
+                        saleItem.discountAmount,
+                        saleItem.isPercentageDiscount
+                    )
                     (price - discount) * saleItem.quantity
                 }
             }
@@ -373,7 +424,6 @@ class ReportViewModel @Inject constructor(
         // Create sales trend (by date)
         val salesTrend = salesRecords
             .groupBy { record ->
-                // Group by day using lastUpdated timestamp
                 val timestamp = record.lastUpdated.toLong()
                 val localDate = java.time.Instant.ofEpochMilli(timestamp)
                     .atZone(ZoneId.systemDefault())
@@ -384,14 +434,19 @@ class ReportViewModel @Inject constructor(
                 records.flatMap { it.salesRecordItem }
                     .sumOf { saleItem ->
                         val price = saleItem.selling_price
-                        val discount = calculateDiscount(price, saleItem.discountAmount, saleItem.isPercentageDiscount)
+                        val discount = calculateDiscount(
+                            price,
+                            saleItem.discountAmount,
+                            saleItem.isPercentageDiscount
+                        )
                         (price - discount) * saleItem.quantity
                     }
             }
 
         // Create top products list
         val productSales = salesRecords.flatMap { it.salesRecordItem }
-            .groupBy { it.productName }
+            .groupBy { state.value.inventoryItems.find { items -> items.id == it.productId }?.name
+                ?: "" }
             .mapValues { (_, items) -> items.sumOf { it.quantity } }
             .toList()
             .sortedByDescending { it.second }
@@ -435,7 +490,6 @@ class ReportViewModel @Inject constructor(
                 categoryBreakdown = categoryBreakdown,
                 salesTrend = salesTrend,
                 topProducts = productSales,
-                // New line chart data
                 salesTrendSortedEntries = sortedEntries,
                 salesTrendValues = trendValues,
                 salesTrendLine = salesLine,
@@ -444,7 +498,11 @@ class ReportViewModel @Inject constructor(
         }
     }
 
-    private fun calculateDiscount(price: Double, discountAmount: Float, isPercentage: Boolean): Double {
+    private fun calculateDiscount(
+        price: Double,
+        discountAmount: Float,
+        isPercentage: Boolean
+    ): Double {
         return if (isPercentage) {
             price * (discountAmount / 100f)
         } else {

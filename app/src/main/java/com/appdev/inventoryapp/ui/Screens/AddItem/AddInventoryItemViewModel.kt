@@ -26,14 +26,13 @@ class AddInventoryItemViewModel @Inject constructor(
     val appPreferencesManager: AppPreferencesManager
 ) : ViewModel() {
 
-
     private val _state = MutableStateFlow(AddInventoryItemState())
     val state: StateFlow<AddInventoryItemState> = _state.asStateFlow()
 
     init {
         fetchCategories()
         _state.update {
-            it.copy(dontShowConfirmationAgain = appPreferencesManager.shouldSkipInventoryConfirmation())
+            it.copy(dontShowConfirmationAgain = appPreferencesManager.shouldSkipInventoryConfirmation(),)
         }
     }
 
@@ -47,12 +46,71 @@ class AddInventoryItemViewModel @Inject constructor(
                 quantity = product.quantity.toString(),
                 costPrice = product.cost_price.toString(),
                 sellingPrice = product.selling_price.toString(),
-                category = product.category,
+                categoryId = product.category_id, // Updated to use category_id
+                categoryName = findCategoryNameById(product.category_id), // Get name by ID
                 sku = product.sku,
                 taxes = product.taxes.toString(),
                 initialImageUrls = product.imageUrls,
                 imageUris = product.imageUrls.map { url -> Uri.parse(url) }
             )
+        }
+    }
+
+    // Helper function to find category name by ID
+    private fun findCategoryNameById(categoryId: Long): String {
+        return _state.value.categories.find { it.first == categoryId }?.second ?: ""
+    }
+    private fun checkForDuplicates(onNoDuplicatesFound: () -> Unit) {
+        val currentState = _state.value
+        val shopId = sessionManagement.getShopId() ?: return
+
+        if (currentState.name.isBlank() || currentState.sku.isBlank()) {
+            // Can't check for duplicates if these fields are empty
+            return
+        }
+
+        viewModelScope.launch {
+            _state.update { it.copy(isLoading = true) }
+
+            // Pass the current item ID for exclusion when updating
+            repository.checkForDuplicateItem(
+                currentState.name,
+                currentState.sku,
+                shopId,
+                excludeItemId = currentState.itemId // This will be null for new items
+            ).collect { result ->
+                when (result) {
+                    is ResultState.Loading -> {
+                        // Already set loading state above
+                    }
+
+                    is ResultState.Success -> {
+                        val (isDuplicate, duplicateType) = result.data
+
+                        if (isDuplicate) {
+                            _state.update {
+                                it.copy(
+                                    isLoading = false,
+                                    errorMessage = "A product with the same $duplicateType already exists in this shop."
+                                )
+                            }
+                        } else {
+                            // No duplicate found, proceed with the provided callback
+                            _state.update { it.copy(isLoading = false) }
+                            onNoDuplicatesFound()
+                        }
+                    }
+
+                    is ResultState.Failure -> {
+                        _state.update {
+                            it.copy(
+                                isLoading = false,
+                                errorMessage = "Error checking for duplicates: ${result.message.localizedMessage ?: "Unknown error"}"
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -91,11 +149,15 @@ class AddInventoryItemViewModel @Inject constructor(
             }
 
             is AddInventoryItemEvent.CategoryChanged -> {
-                _state.update { it.copy(category = event.category) }
+                _state.update {
+                    it.copy(
+                        categoryId = event.categoryId,
+                        categoryName = event.categoryName
+                    )
+                }
             }
 
             is AddInventoryItemEvent.FetchCategories -> fetchCategories()
-
 
             is AddInventoryItemEvent.CategoriesFetchFailed -> {
                 _state.update {
@@ -110,10 +172,12 @@ class AddInventoryItemViewModel @Inject constructor(
             is AddInventoryItemEvent.SaveNewCategory -> saveNewCategory()
 
             is AddInventoryItemEvent.NewCategoryAdded -> {
+                val newCategory = event.category
                 _state.update {
                     it.copy(
-                        categories = it.categories + event.category,
-                        category = event.category,
+                        categories = it.categories + Pair(newCategory.id, newCategory.categoryName),
+                        categoryId = newCategory.id,
+                        categoryName = newCategory.categoryName,
                         newCategoryDialogVisible = false,
                         newCategoryName = "",
                         newCategoryAddError = null
@@ -147,38 +211,48 @@ class AddInventoryItemViewModel @Inject constructor(
                 _state.update { it.copy(showConfirmationModal = false) }
             }
 
-            is AddInventoryItemEvent.ConfirmSubmit -> {
-                _state.update { it.copy(showConfirmationModal = false) }
-                submitItem(state.value.listOfImageByteArrays)
-            }
-
 
             is AddInventoryItemEvent.RemoveImage -> {
                 val currentUris = _state.value.imageUris.toMutableList()
-
 
                 // Remove the image at the specified index
                 if (event.index < currentUris.size) {
                     currentUris.removeAt(event.index)
                     _state.update { it.copy(imageUris = currentUris) }
                 }
-
             }
 
             is AddInventoryItemEvent.SubmitItem -> {
                 _state.update { it.copy(listOfImageByteArrays = event.listOfImageByteArrays) }
 
-                // Validate before showing confirmation or submitting
+                // Validate before checking for duplicates
                 val validationError = validateItemSubmission()
                 if (validationError != null) {
                     // Show error message if validation fails
                     _state.update { it.copy(errorMessage = validationError) }
-                } else if (appPreferencesManager.shouldSkipInventoryConfirmation()) {
-                    submitItem(event.listOfImageByteArrays)
                 } else {
-                    _state.update { it.copy(showConfirmationModal = true) }
+                    // Always check for duplicates, whether adding or updating
+                    checkForDuplicates {
+                        // This lambda is called when no duplicates are found
+                        if (appPreferencesManager.shouldSkipInventoryConfirmation()) {
+                            submitItem(event.listOfImageByteArrays)
+                        } else {
+                            _state.update { it.copy(showConfirmationModal = true) }
+                        }
+                    }
                 }
             }
+
+            is AddInventoryItemEvent.ConfirmSubmit -> {
+                _state.update { it.copy(showConfirmationModal = false) }
+
+                // Always check for duplicates, whether adding or updating
+                checkForDuplicates {
+                    // This lambda is called when no duplicates are found
+                    submitItem(state.value.listOfImageByteArrays)
+                }
+            }
+
 
             is AddInventoryItemEvent.DismissError -> {
                 _state.update {
@@ -186,6 +260,22 @@ class AddInventoryItemViewModel @Inject constructor(
                         errorMessage = null,
                         isSuccess = null,
                         newCategoryAddedMessage = null
+                    )
+                }
+            }
+
+            is AddInventoryItemEvent.ClearForm -> {
+                _state.update {
+                    it.copy(
+                        name = "",
+                        quantity = "",
+                        costPrice = "",
+                        sellingPrice = "",
+                        sku = "",
+                        taxes = "",
+                        imageUris = emptyList(),
+                        listOfImageByteArrays = emptyList()
+                        // Keep category values for convenience
                     )
                 }
             }
@@ -230,19 +320,32 @@ class AddInventoryItemViewModel @Inject constructor(
             }
 
             else -> {
-
+                // Handle any other events
             }
         }
     }
 
     private fun saveNewCategory() {
-        val newCategoryName = state.value.newCategoryName
+        val newCategoryName = state.value.newCategoryName.trim()
         val shopId = sessionManagement.getShopId()
 
-        if (newCategoryName.isNotBlank() && shopId != null) {
+        // First, validate the category name
+        val validationError = validateCategoryName(newCategoryName)
+        if (validationError != null) {
+            _state.update {
+                it.copy(
+                    newCategoryAddError = validationError,
+                    isLoading = false
+                )
+            }
+            return
+        }
+
+        if (shopId != null) {
             // Check if category already exists
-            val isDuplicate =
-                state.value.categories.any { it.equals(newCategoryName, ignoreCase = true) }
+            val isDuplicate = state.value.categories.any {
+                it.second.equals(newCategoryName, ignoreCase = true)
+            }
 
             if (!isDuplicate) {
                 // Create new category object
@@ -262,11 +365,8 @@ class AddInventoryItemViewModel @Inject constructor(
                                 }
 
                                 is ResultState.Success -> {
-                                    handleEvent(
-                                        AddInventoryItemEvent.NewCategoryAdded(
-                                            newCategoryName
-                                        )
-                                    )
+                                    val addedCategory = result.data
+                                    handleEvent(AddInventoryItemEvent.NewCategoryAdded(addedCategory))
                                     _state.update {
                                         it.copy(
                                             newCategoryDialogVisible = false,
@@ -280,9 +380,8 @@ class AddInventoryItemViewModel @Inject constructor(
                                 is ResultState.Failure -> {
                                     _state.update {
                                         it.copy(
-                                            errorMessage = result.message.localizedMessage
+                                            newCategoryAddError = result.message.localizedMessage
                                                 ?: "Failed to add category",
-                                            newCategoryDialogVisible = false,
                                             isLoading = false
                                         )
                                     }
@@ -294,22 +393,21 @@ class AddInventoryItemViewModel @Inject constructor(
                 // Handle duplicate category
                 _state.update {
                     it.copy(
-                        errorMessage = "Category already exists",
-                        newCategoryDialogVisible = false
+                        errorMessage = "Category with this name already exists",
+                        isLoading = false
                     )
                 }
             }
         } else {
-            // Handle invalid input
+            // Handle missing shop ID
             _state.update {
                 it.copy(
-                    errorMessage = "Category name cannot be empty",
-                    newCategoryDialogVisible = false
+                    newCategoryAddError = "Shop ID not found. Please log in again.",
+                    isLoading = false
                 )
             }
         }
     }
-
 
     private fun fetchCategories() {
         val shopId = sessionManagement.getShopId()
@@ -323,9 +421,12 @@ class AddInventoryItemViewModel @Inject constructor(
                             }
 
                             is ResultState.Success -> {
+                                val categoryPairs = result.data.map { category ->
+                                    Pair(category.id, category.categoryName)
+                                }
                                 _state.update {
                                     it.copy(
-                                        categories = result.data.map { category -> category.categoryName },
+                                        categories = categoryPairs,
                                         isLoading = false
                                     )
                                 }
@@ -345,7 +446,13 @@ class AddInventoryItemViewModel @Inject constructor(
             }
         }
     }
-
+    private fun validateCategoryName(name: String): String? {
+        return when {
+            name.isEmpty() -> "Category name cannot be empty"
+            name.length > 20 -> "Category name must be 20 characters or less"
+            else -> null
+        }
+    }
     private fun validateItemSubmission(): String? {
         val currentState = _state.value
 
@@ -354,7 +461,7 @@ class AddInventoryItemViewModel @Inject constructor(
             currentState.quantity.isBlank() -> "Please enter quantity"
             currentState.costPrice.isBlank() -> "Please enter cost price"
             currentState.sellingPrice.isBlank() -> "Please enter selling price"
-            currentState.category.isBlank() -> "Please select a category"
+            currentState.categoryId == -1L -> "Please select a category"
             currentState.sku.isBlank() -> "Please enter SKU"
             currentState.taxes.isBlank() -> "Please enter taxes"
             _state.value.imageUris.isEmpty() -> "Please add at least one image"
@@ -362,27 +469,25 @@ class AddInventoryItemViewModel @Inject constructor(
         }
     }
 
-
     private fun submitItem(listOfImageByteArrays: List<ByteArray?>) {
         val currentState = _state.value
 
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
 
-
             if (currentState.itemId != null) {
                 // Update existing item
                 val updatedItem = InventoryItem(
                     id = currentState.itemId,
-                    shop_id = currentState.shop_id, // Replace with actual shop ID
-                    creator_id = currentState.creator_id, // Replace with actual user ID
+                    shop_id = currentState.shop_id,
+                    creator_id = currentState.creator_id,
                     name = currentState.name,
                     quantity = currentState.quantity.toInt(),
                     cost_price = currentState.costPrice.toDouble(),
                     selling_price = currentState.sellingPrice.toDouble(),
                     lastUpdated = System.currentTimeMillis().toString(),
                     imageUrls = currentState.initialImageUrls,
-                    category = currentState.category,
+                    category_id = currentState.categoryId, // Updated to use category_id
                     sku = currentState.sku,
                     taxes = if (currentState.taxes.isNotEmpty()) currentState.taxes.toDoubleOrNull()
                         ?: 0.0 else 0.0
@@ -392,15 +497,15 @@ class AddInventoryItemViewModel @Inject constructor(
             } else {
                 // Create new item
                 val newItem = InventoryItem(
-                    shop_id = sessionManagement.getShopId() ?: "", // Replace with actual shop ID
-                    creator_id = sessionManagement.getUserId() ?: "", // Replace with actual user ID
+                    shop_id = sessionManagement.getShopId() ?: "",
+                    creator_id = sessionManagement.getUserId() ?: "",
                     name = currentState.name,
                     quantity = currentState.quantity.toInt(),
                     cost_price = currentState.costPrice.toDouble(),
                     selling_price = currentState.sellingPrice.toDouble(),
                     lastUpdated = System.currentTimeMillis().toString(),
                     imageUrls = emptyList(),
-                    category = currentState.category,
+                    category_id = currentState.categoryId, // Updated to use category_id
                     sku = currentState.sku,
                     taxes = if (currentState.taxes.isNotEmpty()) currentState.taxes.toDoubleOrNull()
                         ?: 0.0 else 0.0

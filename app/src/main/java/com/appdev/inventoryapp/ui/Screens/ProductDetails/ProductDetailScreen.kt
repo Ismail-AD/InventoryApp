@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.appdev.inventoryapp.domain.model.Category
 import com.appdev.inventoryapp.domain.model.InventoryItem
 import com.appdev.inventoryapp.ui.Reuseables.CustomSlider
 import java.text.SimpleDateFormat
@@ -27,6 +28,7 @@ import java.util.Locale
 @Composable
 fun ProductDetailScreen(
     product: InventoryItem,
+    category: String,
     onBackPressed: () -> Unit
 ) {
     Scaffold(
@@ -109,7 +111,7 @@ fun ProductDetailScreen(
 
             DetailSection("Product Details") {
                 DetailRow("SKU", product.sku)
-                DetailRow("Category", product.category)
+                DetailRow("Category", category)
                 DetailRow("Quantity", "${product.quantity}")
                 DetailRow("Shop ID", product.shop_id)
                 DetailRow("Last Updated", getCurrentDate(product.lastUpdated))
@@ -118,7 +120,7 @@ fun ProductDetailScreen(
             DetailSection("Financial Details") {
                 DetailRow("Selling Price", "$${product.selling_price}")
                 DetailRow("Cost Price", "$${product.cost_price}")
-                DetailRow("Taxes", "$${product.taxes}")
+                DetailRow("Taxes", "${product.taxes}%")
             }
         }
     }
