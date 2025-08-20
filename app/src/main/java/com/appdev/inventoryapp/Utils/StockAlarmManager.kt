@@ -39,18 +39,13 @@ object StockAlarmManager {
             intent,
             pendingIntentFlags
         )
-
-        // Cancel any existing alarms if requested
         if (cancelExisting) {
             alarmManager.cancel(pendingIntent)
         }
-
-        // Set the alarm
         val triggerAtMillis = System.currentTimeMillis() + initialDelay
 
         when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-                // Android 12+ (API 31+)
                 if (alarmManager.canScheduleExactAlarms()) {
                     alarmManager.setExactAndAllowWhileIdle(
                         AlarmManager.RTC_WAKEUP,
@@ -66,7 +61,6 @@ object StockAlarmManager {
                 }
             }
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
-                // Android 6 to 11 (API 23–30)
                 alarmManager.setExactAndAllowWhileIdle(
                     AlarmManager.RTC_WAKEUP,
                     triggerAtMillis,
@@ -74,7 +68,6 @@ object StockAlarmManager {
                 )
             }
             else -> {
-                // Below Android 6 (API < 23)
                 alarmManager.setExact(
                     AlarmManager.RTC_WAKEUP,
                     triggerAtMillis,
@@ -87,25 +80,15 @@ object StockAlarmManager {
         Log.d(TAG, "Stock check alarm scheduled to trigger in $delayInHours hours")
     }
 
-    /**
-     * Convenience method for first-time alarm scheduling
-     */
     fun scheduleStockCheck(context: Context, shopId: String) {
         scheduleAlarm(context, shopId, true)
     }
 
-    /**
-     * Convenience method for rescheduling after an alarm has fired
-     */
     fun scheduleNextAlarm(context: Context, shopId: String) {
         scheduleAlarm(context, shopId, false)
     }
 
-    /**
-     * Cancels the stock check alarm
-     */
     fun cancelStockCheck(context: Context) {
-        Log.d(TAG, "Canceling stock check alarm")
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val intent = Intent(context, StockCheckReceiver::class.java)
@@ -127,9 +110,6 @@ object StockAlarmManager {
         Log.d(TAG, "Stock check alarm canceled")
     }
 
-    /**
-     * Checks if the alarm is currently set
-     */
     fun isAlarmSet(context: Context): Boolean {
         val intent = Intent(context, StockCheckReceiver::class.java)
 
