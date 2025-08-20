@@ -32,13 +32,8 @@ class BootCompletedReceiver : BroadcastReceiver() {
 
             scope.launch {
                 try {
-                    // Get the shop ID from preferences
                     val shopId = sessionManagement.getShopId() ?: ""
                     val notificationsEnabled = notificationPreferenceManager.isLowStockNotificationEnabled()
-
-                    Log.d(TAG, "Active shop ID: $shopId, Notifications enabled: $notificationsEnabled")
-
-                    // If notifications were enabled and we have a valid shop ID, restart the alarm
                     if (shopId.isNotEmpty() && notificationsEnabled) {
                         Log.d(TAG, "Restarting stock check alarms after device reboot")
                         StockAlarmManager.scheduleStockCheck(context, shopId)
