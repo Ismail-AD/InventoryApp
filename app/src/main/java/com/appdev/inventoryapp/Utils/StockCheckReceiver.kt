@@ -28,19 +28,14 @@ class StockCheckReceiver : BroadcastReceiver() {
     lateinit var repository: InventoryRepository
 
     override fun onReceive(context: Context, intent: Intent) {
-        Log.d(TAG, "Stock check alarm received")
-
         val shopId = intent.getStringExtra("shop_id")
         if (shopId == null) {
-            Log.e(TAG, "No shop ID provided in intent")
             return
         }
 
         scope.launch {
             try {
                 checkInventoryLevels(context, shopId)
-
-                // Schedule the next alarm
                 StockAlarmManager.scheduleNextAlarm(context, shopId)
             } catch (e: Exception) {
                 Log.e(TAG, "Error checking inventory levels", e)
@@ -50,10 +45,7 @@ class StockCheckReceiver : BroadcastReceiver() {
     }
 
     private suspend fun checkInventoryLevels(context: Context, shopId: String) {
-        Log.d(TAG, "Checking inventory levels for shop: $shopId")
-
         try {
-            // Don't use firstOrNull directly on the repository flow
             repository.getAllInventoryItems(shopId).collect { result ->
                 when (result) {
                     is ResultState.Success -> {
@@ -63,22 +55,19 @@ class StockCheckReceiver : BroadcastReceiver() {
                         items.forEach { item ->
                             if (item.quantity < NotificationUtils.LOW_STOCK_THRESHOLD) {
                                 lowStockItems.add(item)
-                                Log.d(TAG, "Low stock item found: ${item.name}, quantity: ${item.quantity}")
                                 NotificationUtils.showLowStockNotification(context, item)
                             }
                         }
 
                         if (lowStockItems.size > 1) {
-                            Log.d(TAG, "Multiple low stock items found: ${lowStockItems.size}")
                             NotificationUtils.showSummaryNotification(context, lowStockItems.size)
                         }
                     }
                     is ResultState.Failure -> {
-                        Log.e(TAG, "Failed to get inventory items: ${result.message}")
+                       
                     }
                     is ResultState.Loading -> {
-                        // Just log this state
-                        Log.d(TAG, "Loading inventory items...")
+                      
                     }
                 }
             }
