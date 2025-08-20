@@ -10,9 +10,6 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/**
- * Utility class for securely encrypting and decrypting passwords using Android KeyStore
- */
 class PasswordCrypto {
     companion object {
         private const val TRANSFORMATION = "${KeyProperties.KEY_ALGORITHM_AES}/${KeyProperties.BLOCK_MODE_GCM}/${KeyProperties.ENCRYPTION_PADDING_NONE}"
@@ -21,16 +18,9 @@ class PasswordCrypto {
         private const val GCM_TAG_LENGTH = 128
         private const val KEY_ALIAS = "InventoryAppPasswordKey"
 
-        /**
-         * Encrypts a password string
-         * @param password The plain text password to encrypt
-         * @return A data class containing the encrypted password and IV for decryption
-         */
         fun encryptPassword(password: String): EncryptedData {
             val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE)
             keyStore.load(null)
-
-            // Create or retrieve the key
             if (!keyStore.containsAlias(KEY_ALIAS)) {
                 val keyGenerator = KeyGenerator.getInstance(
                     KeyProperties.KEY_ALGORITHM_AES,
@@ -49,15 +39,11 @@ class PasswordCrypto {
                 keyGenerator.generateKey()
             }
 
-            // Get the key and create cipher
             val key = keyStore.getKey(KEY_ALIAS, null) as SecretKey
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, key)
-
-            // Generate a random ID for this encryption
             val keyId = UUID.randomUUID().toString()
 
-            // Encrypt the password
             val encryptedBytes = cipher.doFinal(password.toByteArray(Charsets.UTF_8))
             val iv = cipher.iv
 
