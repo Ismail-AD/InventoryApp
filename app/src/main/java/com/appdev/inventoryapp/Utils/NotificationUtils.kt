@@ -19,9 +19,6 @@ object NotificationUtils {
     private const val NOTIFICATION_ID_BASE = 1000
     private const val SUMMARY_NOTIFICATION_ID = 9999
 
-    /**
-     * Create notification channel for Android O and above
-     */
      fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val importance = NotificationManager.IMPORTANCE_DEFAULT
@@ -34,13 +31,10 @@ object NotificationUtils {
         }
     }
 
-    /**
-     * Create an intent to open the inventory screen
-     */
+   
     private fun createInventoryIntent(context: Context): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            // Add any extras to navigate to the inventory screen
             putExtra("OPEN_INVENTORY", true)
         }
 
@@ -57,10 +51,6 @@ object NotificationUtils {
             pendingIntentFlags
         )
     }
-
-    /**
-     * Show notification for a single low stock item
-     */
     fun showLowStockNotification(context: Context, item: InventoryItem) {
         createNotificationChannel(context)
 
@@ -73,16 +63,13 @@ object NotificationUtils {
             .setContentText("${item.name} is running low (${item.quantity} remaining)")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
-            .setAutoCancel(true) // Notification disappears when tapped
+            .setAutoCancel(true) 
             .setGroup("low_stock_group")
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(notificationId, builder.build())
     }
 
-    /**
-     * Show a summary notification when multiple items are low on stock
-     */
     fun showSummaryNotification(context: Context, itemCount: Int) {
         createNotificationChannel(context)
 
